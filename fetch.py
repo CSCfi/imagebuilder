@@ -14,20 +14,42 @@ import requests
 from dotenv import load_dotenv
 
 
-def download_file(url: str, filename: str) -> None:
+def download_file(url: str, filename: str) -> bool:
     """
     Downloads a file from a specified url using chucking
     """
+    try:
+        with requests.get(
+                url,
+                allow_redirects=True,
+                timeout=600,
+                stream=True
+            ) as r:
+            with open(filename,"wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
 
-    with requests.get(
-            url,
-            allow_redirects=True,
-            timeout=600,
-            stream=True
-        ) as r:
-        with open(filename,"wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
+        return True
+    except requests.exceptions.ConnectionError:
+        print(f"Unable to download {filename}")
+        return False
+
+
+
+def fetch_checksum(url: str, filename: str, fallback: str | None) -> str | None:
+    """
+    Fetches a checksum file from url and finds a match for filename
+    """
+    try:
+        return next((
+                line
+                for line in requests.get(url, timeout=5).text.split('\n')
+                    if filename in line
+            ), fallback)
+    except requests.exceptions.ConnectionError:
+        print(f"Unable to fetch new checksum for {filename}")
+        return fallback
+
 
 
 
@@ -56,13 +78,7 @@ def main() -> None:
                 old_checksum = f.read()
 
 
-        new_checksum = next(
-            (
-                line
-                for line in requests.get(version["checksum_url"], timeout=5).text.split('\n')
-                    if filename in line
-            )
-            , old_checksum)
+        new_checksum = fetch_checksum(version["checksum_url"], filename, old_checksum)
 
 
         if new_checksum == old_checksum:
@@ -75,7 +91,8 @@ def main() -> None:
 
 
         # Download image
-        download_file(version["image_url"],filename)
+        if not download_file(version["image_url"],filename):
+            continue
 
 
 
