@@ -1,0 +1,21 @@
+{
+    "new": [
+        {
+            "image_name": "Ubuntu-24.04",
+            "distro":"ubuntu",
+            "visibility": "public",
+            "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
+            "checksum_url": "https://cloud-images.ubuntu.com/noble/current/SHA256SUMS"
+        },
+        {
+            "image_name": "AlmaLinux-9",
+            "distro":"almalinux",
+            "visibility": "public",
+            "image_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
+            "checksum_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/CHECKSUM"
+        }
+    ],
+    "deprecated": [
+        
+    ]
+}

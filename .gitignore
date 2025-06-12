@@ -1,0 +1,5 @@
+env
+.env
+secure.yaml
+clouds.yaml
+checksums/*
