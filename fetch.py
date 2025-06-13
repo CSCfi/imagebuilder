@@ -9,15 +9,31 @@ For more details refer to README.md
 """
 import os
 import json
-import openstack
+import hashlib
 import requests
-from dotenv import load_dotenv
+import openstack
 
 
-def download_file(url: str, filename: str) -> bool:
+def download_file(url: str, filename: str, new_checksum: str) -> bool:
     """
     Downloads a file from a specified url using chucking
+    Also converts it to a .raw file
     """
+    if os.path.exists("tmp/"+filename):
+        hash256 = hashlib.sha256()
+        with open("tmp/"+filename, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                hash256.update(chunk)
+
+        if hash256.hexdigest().lower() == new_checksum.split(" ")[0].lower():
+            print("File already exists on disk.")
+            return True
+
+
+        cleanup_files(filename)
+
+
+
     try:
         with requests.get(
                 url,
@@ -25,9 +41,12 @@ def download_file(url: str, filename: str) -> bool:
                 timeout=600,
                 stream=True
             ) as r:
-            with open(filename,"wb") as f:
+            with open("tmp/"+filename,"wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
+
+        # Convert to raw
+        os.system(f"qemu-img convert -f qcow2 -O raw tmp/{filename} tmp/{filename}.raw")
 
         return True
 
@@ -49,13 +68,13 @@ def download_file(url: str, filename: str) -> bool:
 
 
 
-def validate_checksum(url: str, filename: str, image_name: str) -> str | None:
+def validate_checksum(url: str, filename: str, image_name: str, cloud: str) -> str | None:
     """
     Validates checksums to check if an image requires updating
     """
     old_checksum = None
-    if os.path.exists("checksums/"+filename+"_CHECKSUM"):
-        with open("checksums/"+filename+"_CHECKSUM","r", encoding="utf-8") as f:
+    if os.path.exists("checksums/"+cloud+"_"+image_name+"_CHECKSUM"):
+        with open("checksums/"+cloud+"_"+image_name+"_CHECKSUM","r", encoding="utf-8") as f:
             old_checksum = f.read()
 
 
@@ -98,7 +117,7 @@ def validate_checksum(url: str, filename: str, image_name: str) -> str | None:
 
 
 
-def test_image(conn: openstack.connection.Connection, image: any) -> bool:
+def test_image(conn: openstack.connection.Connection, image: any, network: str) -> bool:
     """
     Test the newly created image by creating a test server
     """
@@ -109,18 +128,21 @@ def test_image(conn: openstack.connection.Connection, image: any) -> bool:
         flavor="standard.tiny",
         wait=True,
         auto_ip=False,
-        network=os.getenv("NETWORK"),
+        network=network,
         timeout=360
     )
 
     found_test_server = conn.get_server_by_id(test_server.id)
+
+
     if found_test_server["status"] == "ERROR":
+        conn.delete_server(test_server.id)
         print(f"Server {test_server.id} failed to start with image {image.id}!")
         return False
 
+
+
     conn.delete_server(test_server.id)
-
-
 
 
     return True
@@ -132,36 +154,33 @@ def cleanup_files(filename: str) -> None:
     """
 
     try:
-        os.remove(filename)
+        os.remove("tmp/"+filename)
     except OSError:
         pass
 
     try:
-        os.remove(filename+".raw")
+        os.remove("tmp/"+filename+".raw")
     except OSError:
         pass
 
 
 
 
-def create_image(conn: openstack.connection.Connection, version: any, filename: str) -> any:
+def create_image(conn: openstack.connection.Connection, version: any,
+                 filename: str, new_checksum: str, network: str) -> any:
     """
     Creates an image
     """
 
     # Download image
-    if not download_file(version["image_url"],filename):
+    if not download_file(version["image_url"],filename, new_checksum):
         cleanup_files(filename)
         return None
 
 
-
-    # convert to raw
-    os.system(f"qemu-img convert -f qcow2 -O raw {filename} {filename}.raw")
-
     new_image = conn.create_image(
         name=version["image_name"],
-        filename=filename+".raw",
+        filename="tmp/"+filename+".raw",
         wait=True,
         visibility="private",
         allow_duplicates=True,
@@ -174,10 +193,9 @@ def create_image(conn: openstack.connection.Connection, version: any, filename: 
     )
 
 
-    cleanup_files(filename)
 
     # Test image
-    if not test_image(conn, new_image):
+    if not test_image(conn, new_image, network):
         return None
 
 
@@ -193,10 +211,12 @@ def main() -> None:
     Reads defined images from input.json, downloads new images and deprecates old ones
     """
 
-    load_dotenv()
+    cloud = os.getenv("CLOUD") # get it once to avoid potential race conditions
+    network = os.getenv("NETWORK")
+
 
     openstack.enable_logging(debug=True)
-    conn = openstack.connect(cloud=os.getenv("CLOUD"))
+    conn = openstack.connect(cloud=cloud)
 
     input_data = None
     with open("input.json", "r", encoding="utf-8") as f:
@@ -207,7 +227,8 @@ def main() -> None:
     for version in input_data["new"]:
         filename = version["image_url"].split("/")[-1]
 
-        new_checksum = validate_checksum(version["checksum_url"], filename, version["image_name"])
+        new_checksum = validate_checksum(version["checksum_url"], filename,
+                                         version["image_name"], cloud)
 
         if new_checksum is None:
             continue
@@ -216,7 +237,7 @@ def main() -> None:
 
         print(f"Downloading {version["image_name"]}")
 
-        new_image = create_image(conn, version, filename)
+        new_image = create_image(conn, version, filename, new_checksum, network)
 
         if new_image is None:
             print("An error occured while creating the image")
@@ -244,7 +265,8 @@ def main() -> None:
 
 
 
-        with open("checksums/"+filename+"_CHECKSUM","w", encoding="utf-8") as f:
+        with open("checksums/"+cloud+"_"+version["image_name"]+"_CHECKSUM","w",
+                  encoding="utf-8") as f:
             f.write(new_checksum)
 
 
@@ -260,6 +282,16 @@ def main() -> None:
             else:
                 # used by someone. set to community
                 conn.image.update_image(img.id, visibility="community")
+
+
+        # It is deprecated so get rid of the files on disk
+        try:
+            os.remove("checksums/"+version["image_name"]+"_CHECKSUM")
+        except OSError:
+            pass
+
+        cleanup_files(version["filename"])
+
 
 
 
