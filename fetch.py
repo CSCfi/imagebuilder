@@ -19,13 +19,15 @@ def download_file(url: str, filename: str, new_checksum: str) -> bool:
     Downloads a file from a specified url using chucking
     Also converts it to a .raw file
     """
+
+    # Check if the same file already exists on disk
     if os.path.exists("tmp/"+filename):
         hash256 = hashlib.sha256()
         with open("tmp/"+filename, "rb") as f:
             for chunk in iter(lambda: f.read(8192), b''):
                 hash256.update(chunk)
 
-        if hash256.hexdigest().lower() == new_checksum.split(" ")[0].lower():
+        if hash256.hexdigest().lower() in new_checksum.lower().split(" "):
             print("File already exists on disk.")
             return True
 
@@ -72,6 +74,8 @@ def validate_checksum(url: str, filename: str, image_name: str, cloud: str) -> s
     """
     Validates checksums to check if an image requires updating
     """
+
+
     old_checksum = None
     if os.path.exists("checksums/"+cloud+"_"+image_name+"_CHECKSUM"):
         with open("checksums/"+cloud+"_"+image_name+"_CHECKSUM","r", encoding="utf-8") as f:
@@ -84,7 +88,7 @@ def validate_checksum(url: str, filename: str, image_name: str, cloud: str) -> s
         new_checksum = next((
                 line
                 for line in requests.get(url, timeout=5).text.split('\n')
-                    if filename in line
+                    if filename in line and not line.startswith("#")
             ), old_checksum)
 
     except requests.exceptions.HTTPError:
@@ -125,7 +129,6 @@ def test_image_pinging(conn: openstack.connection.Connection,
     if os.getenv("DISABLE_PINGING") is not None:
         print("Skipping ping test...")
         return True
-
 
     public_id = conn.network.find_network("public", is_router_external=True).id
 
