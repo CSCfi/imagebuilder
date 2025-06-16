@@ -115,12 +115,105 @@ def validate_checksum(url: str, filename: str, image_name: str, cloud: str) -> s
     return new_checksum
 
 
+def test_image_pinging(conn: openstack.connection.Connection,
+                       network: str, image: any, server_id: int) -> bool:
+    """
+    Test if the newly built image can be pinged by attaching it to a network
+    Creates a router, interface and a floating ip which get cleaned up
+    """
+
+    if os.getenv("DISABLE_PINGING") is not None:
+        print("Skipping ping test...")
+        return True
+
+
+    public_id = conn.network.find_network("public", is_router_external=True).id
+
+    router = conn.network.find_router(f"{image.name}_TEST_ROUTER")
+
+    if not router:
+        router = conn.network.create_router(
+            name=f"{image.name}_TEST_ROUTER",
+            external_gateway_info={"network_id": public_id},
+        )
+    else:
+        conn.network.update_router(
+            router.id,
+            external_gateway_info={"network_id": public_id}
+        )
+
+    subnet = next(conn.network.subnets(network_id=conn.network.find_network(network).id),None)
+
+    if subnet is None:
+        conn.network.update_router(router, external_gateway_info=None)
+        conn.network.delete_router(router.id)
+        print(f"No subnet is configured for {network}")
+        return False
+
+    attached = any(
+        port.fixed_ips[0]['subnet_id'] == subnet.id
+        for port in conn.network.ports(device_id=router.id)
+        if port.fixed_ips
+    )
+
+    if attached:
+        conn.network.remove_interface_from_router(router, subnet_id=subnet.id)
+
+    conn.network.add_interface_to_router(
+        router.id,
+        subnet_id=subnet.id
+    )
+
+    floating_ip = conn.network.create_ip(
+        floating_network_id=public_id
+    )
+
+    port = next(conn.network.ports(device_id=server_id), None)
+
+    floating_ip = conn.network.update_ip(
+        floating_ip.id,
+        port_id=port.id
+    )
+
+
+    ping_result = os.system(f"timeout 360 bash -c \
+                            'while ! \
+                                 ping -c 1 -W 1 {floating_ip.floating_ip_address}; \
+                                 do sleep 1; \
+                             done'"
+                            )
+
+
+    conn.network.delete_ip(floating_ip)
+    conn.network.remove_interface_from_router(router, subnet_id=subnet.id)
+    conn.network.update_router(router, external_gateway_info=None)
+    conn.network.delete_router(router.id)
+
+
+
+    return ping_result == 0
+
 
 
 def test_image(conn: openstack.connection.Connection, image: any, network: str) -> bool:
     """
     Test the newly created image by creating a test server
     """
+
+    secgroup = conn.network.create_security_group(name=f"{image.name}_TEST_SECURITY_GROUP")
+    conn.network.create_security_group_rule(
+        security_group_id=secgroup.id,
+        direction='ingress',
+        ether_type='IPv4',
+        protocol='icmp'
+    )
+    conn.network.create_security_group_rule(
+        security_group_id=secgroup.id,
+        direction='egress',
+        ether_type='IPv4',
+        protocol='icmp'
+    )
+
 
     test_server = conn.create_server(
         name=image.name+"_TESTSERVER",
@@ -129,20 +222,31 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         wait=True,
         auto_ip=False,
         network=network,
-        timeout=360
+        timeout=360,
+        security_groups=[secgroup.id],
     )
+
 
     found_test_server = conn.get_server_by_id(test_server.id)
 
 
     if found_test_server["status"] == "ERROR":
         conn.delete_server(test_server.id)
+        conn.network.delete_security_group(secgroup.id)
         print(f"Server {test_server.id} failed to start with image {image.id}!")
         return False
 
+    # Test pinging
+    ping_result = test_image_pinging(conn, network, image, test_server.id)
 
 
-    conn.delete_server(test_server.id)
+    conn.delete_server(test_server.id, wait=True)
+    conn.network.delete_security_group(secgroup.id)
+
+
+    if not ping_result:
+        print(f"Server {test_server.id} failed to respond to ping!")
+        return False
 
 
     return True
@@ -215,13 +319,12 @@ def main() -> None:
     network = os.getenv("NETWORK")
 
 
-    openstack.enable_logging(debug=True)
+    # openstack.enable_logging(debug=True)
     conn = openstack.connect(cloud=cloud)
 
     input_data = None
     with open("input.json", "r", encoding="utf-8") as f:
         input_data = json.load(f)
-
 
 
     for version in input_data["new"]:
@@ -251,8 +354,8 @@ def main() -> None:
                 continue
 
             # Check if image is unused
-            if (next(conn.compute.servers(image=img.id), None) is None and
-                next(conn.block_storage.volumes(image_id=img.id), None) is None):
+            if (next(conn.compute.servers(image=img.id, all_projects=True), None) is None and
+                next(conn.block_storage.volumes(image_id=img.id, all_projects=True),None) is None):
                 # not used by any server. good to delete?
                 conn.delete_image(img.id)
             else:
@@ -275,8 +378,8 @@ def main() -> None:
         for img in conn.image.images(name=version["image_name"], owner=conn.current_project_id):
 
             # Check if image is unused
-            if (next(conn.compute.servers(image=img.id), None) is None and
-                next(conn.block_storage.volumes(image_id=img.id),None) is None):
+            if (next(conn.compute.servers(image=img.id, all_projects=True), None) is None and
+                next(conn.block_storage.volumes(image_id=img.id, all_projects=True),None) is None):
                 # not used by any server. good to delete.
                 conn.delete_image(img.id)
             else:

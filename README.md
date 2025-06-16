@@ -6,6 +6,8 @@ The package `qemu-utils` is required for this script to function properly.
 
 Please remember to define CLOUD and NETWORK in your shell.
 
+If you wish to disable ping tests, set the environment variable DISABLE_PINGING
+
 input.json should look something like this.
 ```json
 {
