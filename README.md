@@ -5,8 +5,12 @@ Fetches and deprecates images for openstack. Images to be fetched/deprecated can
 The package `qemu-utils` is required for this script to function properly.
 
 Please remember to define CLOUD and NETWORK in your shell.
+Example:
+```bash
+CLOUD="openstack" NETWORK="project_1234" python3 fetch.py
+```
 
-If you wish to disable ping tests, set the environment variable DISABLE_PINGING
+If you wish to disable ping tests, set the environment variable DISABLE_PINGING to anything
 
 input.json should look something like this.
 ```json
