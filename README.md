@@ -4,6 +4,8 @@ Fetches and deprecates images for openstack. Images to be fetched/deprecated can
 
 The package `qemu-utils` is required for this script to function properly.
 
+Do remember to provide a clouds.yaml and/or a secure.yaml file. [More info here](https://docs.openstack.org/python-openstackclient/latest/configuration/index.html#configuration-files)
+
 Please remember to define CLOUD and NETWORK in your shell.
 Example:
 ```bash
