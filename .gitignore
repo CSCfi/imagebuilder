@@ -1,5 +1,7 @@
 tmp/*
 env
 secure.yaml
+secure.yml
 clouds.yaml
+clouds.yml
 checksums/*

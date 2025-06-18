@@ -14,6 +14,24 @@ import requests
 import openstack
 
 
+
+def get_file_hash(filename: str, cur_hash: hashlib._hashlib.HASH) -> str:
+    """
+    Calculate the hash of a file chunked
+    Returns the hexdigest in lowercase
+    """
+
+    if not os.path.exists(filename):
+        return ""
+
+    with open(filename, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            cur_hash.update(chunk)
+
+    return cur_hash.hexdigest().lower()
+
+
+
 def download_file(url: str, filename: str, new_checksum: str) -> bool:
     """
     Downloads a file from a specified url using chucking
@@ -21,18 +39,14 @@ def download_file(url: str, filename: str, new_checksum: str) -> bool:
     """
 
     # Check if the same file already exists on disk
-    if os.path.exists("tmp/"+filename):
-        hash256 = hashlib.sha256()
-        with open("tmp/"+filename, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b''):
-                hash256.update(chunk)
-
-        if hash256.hexdigest().lower() in new_checksum.lower().split(" "):
-            print("File already exists on disk.")
-            return True
+    cur_hash = get_file_hash("tmp/"+filename, hashlib.sha256())
+    if cur_hash != "" and cur_hash in new_checksum.lower():
+        print("File already exists on disk.")
+        return True
 
 
-        cleanup_files(filename)
+    # Remove old files that may exist before downloading new ones
+    cleanup_files(filename)
 
 
 
@@ -48,7 +62,7 @@ def download_file(url: str, filename: str, new_checksum: str) -> bool:
                     f.write(chunk)
 
         # Convert to raw
-        os.system(f"qemu-img convert -f qcow2 -O raw tmp/{filename} tmp/{filename}.raw")
+        os.system(f"qemu-img convert -O raw tmp/{filename} tmp/{filename}.raw")
 
         return True
 
@@ -93,7 +107,7 @@ def validate_checksum(url: str, filename: str, image_name: str, cloud: str) -> s
 
     except requests.exceptions.HTTPError:
         error = True
-        print(f"HTTP error while downloading {image_name}")
+        print(f"HTTP error while downloading checksum for {image_name}")
 
     except requests.exceptions.ReadTimeout:
         error = True
@@ -126,9 +140,11 @@ def test_image_pinging(conn: openstack.connection.Connection,
     Creates a router, interface and a floating ip which get cleaned up
     """
 
-    if os.getenv("DISABLE_PINGING") is not None:
+    if os.getenv("IMAGEBUILDER_DISABLE_PINGING") is not None:
         print("Skipping ping test...")
         return True
+
+    print("Testing pinging")
 
     public_id = conn.network.find_network("public", is_router_external=True).id
 
@@ -181,7 +197,8 @@ def test_image_pinging(conn: openstack.connection.Connection,
 
     ping_result = os.system(f"timeout 360 bash -c \
                             'while ! \
-                                 ping -c 1 -W 1 {floating_ip.floating_ip_address}; \
+                                 ping -c 1 -W 1 {floating_ip.floating_ip_address} \
+                                 > /dev/null 2>&1; \
                                  do sleep 1; \
                              done'"
                             )
@@ -192,6 +209,8 @@ def test_image_pinging(conn: openstack.connection.Connection,
     conn.network.update_router(router, external_gateway_info=None)
     conn.network.delete_router(router.id)
 
+    if ping_result == 0:
+        print("Print tests ok!")
 
 
     return ping_result == 0
@@ -200,8 +219,10 @@ def test_image_pinging(conn: openstack.connection.Connection,
 
 def test_image(conn: openstack.connection.Connection, image: any, network: str) -> bool:
     """
-    Test the newly created image by creating a test server
+    Test the newly created image by creating a test server and pinging it
     """
+
+    print("Testing newly created image")
 
     secgroup = conn.network.create_security_group(name=f"{image.name}_TEST_SECURITY_GROUP")
     conn.network.create_security_group_rule(
@@ -229,6 +250,8 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         security_groups=[secgroup.id],
     )
 
+    print(f"Server with id ({test_server.id}) created")
+
 
     found_test_server = conn.get_server_by_id(test_server.id)
 
@@ -251,6 +274,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         print(f"Server {test_server.id} failed to respond to ping!")
         return False
 
+    print("All tests ok!")
 
     return True
 
@@ -284,6 +308,26 @@ def create_image(conn: openstack.connection.Connection, version: any,
         cleanup_files(filename)
         return None
 
+    # Image downloaded, but is it the same as the current image on openstack?
+    cur_img = next(conn.image.images(
+                            name=version["image_name"],
+                            owner=conn.current_project_id,
+                            visibility=version["visibility"]
+                    ), None)
+
+
+    if (cur_img is not None and
+        cur_img.checksum.lower() == get_file_hash("tmp/"+filename+".raw", hashlib.md5())):
+
+        # Everything is ok so write the checksum pre-emptively
+        with open("checksums/"+conn.config.name+"_"+version["image_name"]+"_CHECKSUM","w",
+                  encoding="utf-8") as f:
+            f.write(new_checksum)
+
+
+        print(f"Openstack already has the current version of {version['image_name']}")
+        return None
+
 
     new_image = conn.create_image(
         name=version["image_name"],
@@ -299,6 +343,11 @@ def create_image(conn: openstack.connection.Connection, version: any,
         }
     )
 
+    if new_image is None:
+        print("An error occured while creating the image")
+        return None
+
+    print(f"Image with id ({new_image.id}) created")
 
 
     # Test image
@@ -318,11 +367,13 @@ def main() -> None:
     Reads defined images from input.json, downloads new images and deprecates old ones
     """
 
-    cloud = os.getenv("CLOUD") # get it once to avoid potential race conditions
-    network = os.getenv("NETWORK")
+    cloud = os.getenv("IMAGEBUILDER_CLOUD") # get it once to avoid potential race conditions
+    network = os.getenv("IMAGEBUILDER_NETWORK")
 
 
-    # openstack.enable_logging(debug=True)
+    openstack.enable_logging(debug=(
+        os.getenv("IMAGEBUILDER_DEBUG") is not None
+        ))
     conn = openstack.connect(cloud=cloud)
 
     input_data = None
@@ -330,7 +381,7 @@ def main() -> None:
         input_data = json.load(f)
 
 
-    for version in input_data["new"]:
+    for version in input_data["current"]:
         filename = version["image_url"].split("/")[-1]
 
         new_checksum = validate_checksum(version["checksum_url"], filename,
@@ -341,13 +392,18 @@ def main() -> None:
 
 
 
-        print(f"Downloading {version["image_name"]}")
+        print(f"Downloading {version['image_name']}")
 
         new_image = create_image(conn, version, filename, new_checksum, network)
 
         if new_image is None:
-            print("An error occured while creating the image")
             continue
+
+
+
+        # Everything is ok! Set visibility to what it should be
+        print(f"Setting image to {version["visibility"]}")
+        conn.image.update_image(new_image.id, visibility=version["visibility"])
 
 
 
@@ -364,11 +420,6 @@ def main() -> None:
             else:
                 # used by someone. set to community
                 conn.image.update_image(img.id, visibility="community")
-
-
-        # Everything is ok! Set visibility to what it should be
-        conn.image.update_image(new_image.id, visibility=version["visibility"])
-
 
 
         with open("checksums/"+cloud+"_"+version["image_name"]+"_CHECKSUM","w",
