@@ -68,3 +68,6 @@ input.json should look something like this.
 }
 
 ```
+
+The data in current can also have a field for "os_type" which can either be set to "linux" or "windows".
+By default it is set to "linux" so you only need to specify it if you are running Windows.

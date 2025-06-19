@@ -7,6 +7,7 @@ For more details refer to README.md
 
 
 """
+import sys
 import os
 import json
 import hashlib
@@ -58,11 +59,29 @@ def download_file(url: str, filename: str, new_checksum: str) -> bool:
                 stream=True
             ) as r:
             with open("tmp/"+filename,"wb") as f:
+                file_size = int(r.headers.get("content-length"))
+                progress = 0
+
+                disp_filename = filename[0:(int(os.get_terminal_size().columns*0.5)-1)]
+                if disp_filename != filename:
+                    disp_filename = disp_filename[:-3] + "..."
+
+                bar_width = min(50, int(os.get_terminal_size().columns - len(disp_filename) - 3))
+
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
+                    progress += len(chunk)
+                    done = int(bar_width * progress / file_size)
+                    sys.stdout.write(f"\r{disp_filename}\t[{'=' * done}{' ' * (bar_width-done)}]")
+                    sys.stdout.flush()
+
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+        print("Converting to .raw")
 
         # Convert to raw
-        os.system(f"qemu-img convert -O raw tmp/{filename} tmp/{filename}.raw")
+        os.system(f"qemu-img convert -p -O raw tmp/{filename} tmp/{filename}.raw")
 
         return True
 
@@ -133,8 +152,7 @@ def validate_checksum(url: str, filename: str, image_name: str, cloud: str) -> s
     return new_checksum
 
 
-def test_image_pinging(conn: openstack.connection.Connection,
-                       network: str, image: any, server_id: int) -> bool:
+def test_image_pinging(conn: openstack.connection.Connection, server_id: int) -> bool:
     """
     Test if the newly built image can be pinged by attaching it to a network
     Creates a router, interface and a floating ip which get cleaned up
@@ -148,46 +166,16 @@ def test_image_pinging(conn: openstack.connection.Connection,
 
     public_id = conn.network.find_network("public", is_router_external=True).id
 
-    router = conn.network.find_router(f"{image.name}_TEST_ROUTER")
-
-    if not router:
-        router = conn.network.create_router(
-            name=f"{image.name}_TEST_ROUTER",
-            external_gateway_info={"network_id": public_id},
-        )
-    else:
-        conn.network.update_router(
-            router.id,
-            external_gateway_info={"network_id": public_id}
-        )
-
-    subnet = next(conn.network.subnets(network_id=conn.network.find_network(network).id),None)
-
-    if subnet is None:
-        conn.network.update_router(router, external_gateway_info=None)
-        conn.network.delete_router(router.id)
-        print(f"No subnet is configured for {network}")
-        return False
-
-    attached = any(
-        port.fixed_ips[0]['subnet_id'] == subnet.id
-        for port in conn.network.ports(device_id=router.id)
-        if port.fixed_ips
-    )
-
-    if attached:
-        conn.network.remove_interface_from_router(router, subnet_id=subnet.id)
-
-    conn.network.add_interface_to_router(
-        router.id,
-        subnet_id=subnet.id
-    )
 
     floating_ip = conn.network.create_ip(
         floating_network_id=public_id
     )
 
     port = next(conn.network.ports(device_id=server_id), None)
+
+    if port is None:
+        print("No network port found")
+        return False
 
     floating_ip = conn.network.update_ip(
         floating_ip.id,
@@ -205,9 +193,6 @@ def test_image_pinging(conn: openstack.connection.Connection,
 
 
     conn.network.delete_ip(floating_ip)
-    conn.network.remove_interface_from_router(router, subnet_id=subnet.id)
-    conn.network.update_router(router, external_gateway_info=None)
-    conn.network.delete_router(router.id)
 
     if ping_result == 0:
         print("Print tests ok!")
@@ -263,7 +248,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         return False
 
     # Test pinging
-    ping_result = test_image_pinging(conn, network, image, test_server.id)
+    ping_result = test_image_pinging(conn, test_server.id)
 
 
     conn.delete_server(test_server.id, wait=True)
@@ -309,6 +294,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
         return None
 
     # Image downloaded, but is it the same as the current image on openstack?
+    print("Comparing downloaded image against openstack")
     cur_img = next(conn.image.images(
                             name=version["image_name"],
                             owner=conn.current_project_id,
@@ -328,6 +314,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
         print(f"Openstack already has the current version of {version['image_name']}")
         return None
 
+    print("Uploading image")
 
     new_image = conn.create_image(
         name=version["image_name"],
@@ -339,7 +326,8 @@ def create_image(conn: openstack.connection.Connection, version: any,
         container_format="bare",
         properties={
             "description":"To find out which user to login with: ssh in as root.",
-            "os_distro":version["distro"]
+            "os_distro":version["distro"],
+            "os_type": version.get("os_type", "linux") # configures ephemeral drive formatting
         }
     )
 
