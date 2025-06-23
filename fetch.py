@@ -113,6 +113,8 @@ def validate_checksum(url: str, filename: str, image_name: str, cloud: str) -> s
     if os.path.exists("checksums/"+cloud+"_"+image_name+"_CHECKSUM"):
         with open("checksums/"+cloud+"_"+image_name+"_CHECKSUM","r", encoding="utf-8") as f:
             old_checksum = f.read()
+    else:
+        print(f"Checksum file for {cloud}_{image_name} does not exist. Creating one")
 
 
     error = False
@@ -195,7 +197,7 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
     conn.network.delete_ip(floating_ip)
 
     if ping_result == 0:
-        print("Print tests ok!")
+        print("Ping tests ok!")
 
 
     return ping_result == 0
@@ -403,7 +405,7 @@ def main() -> None:
             # Check if image is unused
             if (next(conn.compute.servers(image=img.id, all_projects=True), None) is None and
                 next(conn.block_storage.volumes(image_id=img.id, all_projects=True),None) is None):
-                # not used by any server. good to delete?
+                # not used by any server. good to delete.
                 conn.delete_image(img.id)
             else:
                 # used by someone. set to community
