@@ -5,9 +5,10 @@ Fetches and deprecates images for openstack. Images to be fetched/deprecated can
 Please remember to define IMAGEBUILDER_CLOUD and IMAGEBUILDER_NETWORK in your shell.
 
 If you wish to disable ping tests, set the environment variable IMAGEBUILDER_DISABLE_PINGING to anything
+If you wish to skip fetching new checksums, set the environment variable IMAGEBUILDER_SKIP_CHECKSUM to anything
 If you wish for a verbose output of all openstack commands being ran set the variable IMAGEBUILDER_DEBUG to anything
 
-This project has been tested to work with Python version 3.12.3 but newer and slightly older ones are very likely to work.
+This project has been tested to work with Python version 3.12.3 but newer and versions down to 3.9 are very likely to work.
 
 ## Getting started:
 Install `qemu-utils` (Debian/Ubuntu) or `qemu-img` (AlmaLinux/CentOS/RHEL)
@@ -25,12 +26,12 @@ Install required packages from requirements.txt using pip in the virtual environ
 pip install -r requirements.txt
 ```
 
-Get a clouds.yaml file from your openstack provider and place it in one of these 3:
+Configure a clouds.yaml file according to your needs and place it in one of these 3:
  * the current directory
  * ~/.config/openstack
  * /etc/openstack
 
-[More info on clouds.yaml here](https://docs.openstack.org/python-openstackclient/latest/configuration/index.html#configuration-files)
+[Instructions on how to compile a clouds.yaml file](https://docs.openstack.org/python-openstackclient/latest/configuration/index.html#configuration-files)
 
 Set your environment variables as such:
 * IMAGEBUILDER_CLOUD should match your clouds.yaml cloud you would like to use
@@ -68,6 +69,9 @@ input.json should look something like this.
 }
 
 ```
+
+The data in current also accepts custom properties for images. [Here's a list of all possible property values you can set](https://docs.openstack.org/glance/victoria/admin/useful-image-properties.html)
+Keep in mind that os_distro is managed by the distro field in your json file.
 
 The data in current can also have a field for "os_type" which can either be set to "linux" or "windows".
 By default it is set to "linux" so you only need to specify it if you are running Windows.
