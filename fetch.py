@@ -33,7 +33,7 @@ def get_file_hash(filename: str, cur_hash: hashlib._hashlib.HASH) -> str:
 
 
 
-def download_file(url: str, filename: str, new_checksum: str) -> bool:
+def download_image(url: str, filename: str, new_checksum: str) -> bool:
     """
     Downloads a file from a specified url using chucking
     Also converts it to a .raw file
@@ -91,6 +91,13 @@ def download_file(url: str, filename: str, new_checksum: str) -> bool:
             if print_progressbar:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
+
+
+        new_hash = get_file_hash("tmp/"+filename, hashlib.sha256())
+        if new_hash != "" and new_hash not in new_checksum.lower():
+            print("Checksum of the new file does not match!")
+            cleanup_files(filename)
+            return False
 
         print("Converting to .raw")
 
@@ -163,7 +170,7 @@ def validate_checksum(version: any, filename: str,
     try:
         new_checksum = next((
                 line
-                for line in requests.get(version["image_url"], timeout=5).text.split('\n')
+                for line in requests.get(version["checksum_url"], timeout=5).text.split('\n')
                     if filename in line and not line.startswith("#")
             ), None)
 
@@ -338,7 +345,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
     """
 
     # Download image
-    if not download_file(version["image_url"],filename, new_checksum):
+    if not download_image(version["image_url"],filename, new_checksum):
         cleanup_files(filename)
         return None
 
@@ -456,9 +463,12 @@ def main() -> None:
     for version in input_data["current"]:
         filename = version["image_url"].split("/")[-1]
 
+        print(f"=== {version["image_name"]} ===")
+
         new_checksum = validate_checksum(version, filename, conn, cloud)
 
         if new_checksum is None:
+            print("")
             continue
 
 
@@ -468,6 +478,7 @@ def main() -> None:
         new_image = create_image(conn, version, filename, new_checksum, network)
 
         if new_image is None:
+            print("")
             continue
 
 
@@ -485,8 +496,12 @@ def main() -> None:
                   encoding="utf-8") as f:
             f.write(new_checksum)
 
+        print("")
+
 
     for version in input_data["deprecated"]:
+
+        print(f"=== {version["image_name"]} ===")
 
         still_using = delete_unused_images(conn, version["image_name"])
 
@@ -502,6 +517,8 @@ def main() -> None:
             print(f"{version['image_name']} is still used by someone so it is not fully removed")
 
         cleanup_files(version["filename"])
+
+        print("")
 
 
 
