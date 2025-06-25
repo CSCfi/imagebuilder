@@ -50,7 +50,7 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
         # Local file exists but raw doesn't, create one
         if not os.path.exists("tmp/"+filename+".raw"):
             print("RAW file did not exist. Creating...")
-            os.system(f"qemu-img convert {"-p" if print_progressbar else ''} \
+            os.system(f"qemu-img convert {'-p' if print_progressbar else ''} \
                       -O raw tmp/{filename} tmp/{filename}.raw")
 
         return True
@@ -102,7 +102,7 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
         print("Converting to .raw")
 
         # Convert to raw
-        os.system(f"qemu-img convert {"-p" if print_progressbar else ''}\
+        os.system(f"qemu-img convert {'-p' if print_progressbar else ''}\
                    -O raw tmp/{filename} tmp/{filename}.raw")
 
         return True
@@ -151,8 +151,8 @@ def validate_checksum(version: any, filename: str,
     """
 
     old_checksum = None
-    if os.path.exists("checksums/"+cloud+"_"+version["image_name"]+"_CHECKSUM"):
-        with open("checksums/"+cloud+"_"+version["image_name"]+"_CHECKSUM",
+    if os.path.exists(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM"):
+        with open(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
                   "r", encoding="utf-8") as f:
             old_checksum = f.read()
     else:
@@ -228,6 +228,7 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
 
     if port is None:
         print("No network port found")
+        conn.network.delete_ip(floating_ip)
         return False
 
     floating_ip = conn.network.update_ip(
@@ -355,8 +356,10 @@ def create_image(conn: openstack.connection.Connection, version: any,
     if validate_raw_checksum(conn, filename, version):
 
         # Everything is ok so write the checksum pre-emptively
-        with open("checksums/"+conn.config.name+"_"+version["image_name"]+"_CHECKSUM","w",
-                  encoding="utf-8") as f:
+        with open(
+                f"checksums/{conn.config.name}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
+                "w", encoding="utf-8"
+                ) as f:
             f.write(new_checksum)
 
 
@@ -366,7 +369,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
     print("Uploading image")
 
     properties = version.get("properties", {})
-    properties["descrption"] = "To find out which user to login with: ssh in as root."
+    properties["description"] = "To find out which user to login with: ssh in as root."
     properties["os_distro"] = version["distro"]
     properties["os_type"] = version.get("os_type", "linux") # configures ephemeral drive formatting
 
@@ -463,7 +466,7 @@ def main() -> None:
     for version in input_data["current"]:
         filename = version["image_url"].split("/")[-1]
 
-        print(f"=== {version["image_name"]} ===")
+        print(f"=== {version['image_name']} ===")
 
         new_checksum = validate_checksum(version, filename, conn, cloud)
 
@@ -492,8 +495,8 @@ def main() -> None:
         # Remove old ones
         delete_unused_images(conn, version["image_name"], new_image.id)
 
-        with open("checksums/"+cloud+"_"+version["image_name"]+"_CHECKSUM","w",
-                  encoding="utf-8") as f:
+        with open(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
+                  "w",encoding="utf-8") as f:
             f.write(new_checksum)
 
         print("")
@@ -507,7 +510,7 @@ def main() -> None:
 
         # It is deprecated so get rid of the files on disk
         try:
-            os.remove("checksums/"+cloud+"_"+version["image_name"]+"_CHECKSUM")
+            os.remove(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM")
         except OSError:
             pass
 
