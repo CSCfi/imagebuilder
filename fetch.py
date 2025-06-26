@@ -10,11 +10,13 @@ For more details refer to README.md
 import sys
 import os
 import json
+import logging
+import logging.handlers
 import hashlib
 import requests
 import openstack
 
-
+logger = logging.getLogger(__name__)
 
 def get_file_hash(filename: str, cur_hash: hashlib._hashlib.HASH) -> str:
     """
@@ -45,11 +47,11 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
     cur_hash = get_file_hash("tmp/"+filename, hashlib.sha256())
     if cur_hash != "" and cur_hash in new_checksum.lower():
 
-        print("File already exists on disk.")
+        logger.info("File already exists on disk.")
 
         # Local file exists but raw doesn't, create one
         if not os.path.exists("tmp/"+filename+".raw"):
-            print("RAW file did not exist. Creating...")
+            logger.info("RAW file did not exist. Creating...")
             os.system(f"qemu-img convert {'-p' if print_progressbar else ''} \
                       -O raw tmp/{filename} tmp/{filename}.raw")
 
@@ -95,11 +97,11 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
 
         new_hash = get_file_hash("tmp/"+filename, hashlib.sha256())
         if new_hash != "" and new_hash not in new_checksum.lower():
-            print("Checksum of the new file does not match!")
+            logger.error("Checksum of the new file does not match!")
             cleanup_files(filename)
             return False
 
-        print("Converting to .raw")
+        logger.info("Converting to .raw")
 
         # Convert to raw
         os.system(f"qemu-img convert {'-p' if print_progressbar else ''}\
@@ -108,13 +110,13 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
         return True
 
     except requests.exceptions.HTTPError:
-        print(f"HTTP error while downloading {filename}")
+        logger.error("HTTP error while downloading %s",filename)
 
     except requests.exceptions.ReadTimeout:
-        print(f"Download for {filename} timed out")
+        logger.error("Download for %s timed out", filename)
 
     except requests.exceptions.ConnectionError:
-        print(f"Unable to download {filename}")
+        logger.error("Unable to download %s", filename)
 
 
     return False
@@ -156,11 +158,12 @@ def validate_checksum(version: any, filename: str,
                   "r", encoding="utf-8") as f:
             old_checksum = f.read()
     else:
-        print(f"Checksum file for {cloud}_{version['image_name']} does not exist. Creating one")
+        logger.warning("Checksum file for %s_%s does not exist. Creating one",
+                        cloud, version["image_name"])
 
 
     if os.getenv("IMAGEBUILDER_SKIP_CHECKSUM") is not None and old_checksum is not None:
-        print("Skipping checksum fetching...")
+        logger.info("Skipping checksum fetching...")
         return old_checksum # Should something else be returned?
 
 
@@ -175,29 +178,38 @@ def validate_checksum(version: any, filename: str,
             ), None)
 
         if new_checksum is None:
-            print("New checksum could not be found in the list")
+            logger.error("New checksum could not be found in the list")
             new_checksum = old_checksum
 
 
     except requests.exceptions.HTTPError:
         error = True
-        print(f"HTTP error while downloading checksum for {version['image_name']}")
+        logger.error("HTTP error while downloading checksum for %s", version["image_name"])
 
     except requests.exceptions.ReadTimeout:
         error = True
-        print(f"Fetching the checksum for {version['image_name']} timed out")
+        logger.error("Fetching the checksum for %s timed out", version["image_name"])
 
     except requests.exceptions.ConnectionError:
         error = True
-        print(f"Unable to fetch new checksum for {version['image_name']}")
+        logger.error("Unable to fetch new checksum for %s", version["image_name"])
 
 
     if error:
-        print(f"An error occured validating {version['image_name']}")
+        logger.error("An error occured validating %s", version["image_name"])
         return None
 
     if new_checksum == old_checksum and validate_raw_checksum(conn, filename, version):
-        print(f"{version['image_name']} already up to date")
+
+        current_img_id = next(
+            conn.image.images(
+                name=version["image_name"], owner=conn.current_project_id,
+                visibility=version["visibility"]
+                )
+            , None).id
+        logger.info("%s already up to date", version["image_name"])
+        # Delete unused if they exist
+        delete_unused_images(conn, version["image_name"],current_img_id)
         return None
 
 
@@ -212,10 +224,10 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
     """
 
     if os.getenv("IMAGEBUILDER_DISABLE_PINGING") is not None:
-        print("Skipping ping test...")
+        logger.info("Skipping ping test...")
         return True
 
-    print("Testing pinging")
+    logger.info("Testing pinging")
 
     public_id = conn.network.find_network("public", is_router_external=True).id
 
@@ -227,7 +239,7 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
     port = next(conn.network.ports(device_id=server_id), None)
 
     if port is None:
-        print("No network port found")
+        logger.error("No network port found")
         conn.network.delete_ip(floating_ip)
         return False
 
@@ -249,7 +261,7 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
     conn.network.delete_ip(floating_ip)
 
     if ping_result == 0:
-        print("Ping tests ok!")
+        logger.info("Ping tests ok!")
         return True
 
 
@@ -262,7 +274,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
     Test the newly created image by creating a test server and pinging it
     """
 
-    print("Testing newly created image")
+    logger.info("Testing newly created image")
 
     secgroup = conn.network.find_security_group("IMAGEBUILDER_PING_TEST")
 
@@ -293,7 +305,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         security_groups=[secgroup.id],
     )
 
-    print(f"Server with id ({test_server.id}) created")
+    logger.info("Server with id (%s) created", test_server.id)
 
 
     found_test_server = conn.get_server_by_id(test_server.id)
@@ -302,7 +314,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
     if found_test_server["status"] == "ERROR":
         conn.delete_server(test_server.id)
         conn.network.delete_security_group(secgroup.id)
-        print(f"Server {test_server.id} failed to start with image {image.id}!")
+        logger.error("Server %s failed to start with image %s!", test_server.id, image.id)
         return False
 
     # Test pinging
@@ -313,10 +325,10 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
 
 
     if not ping_result:
-        print(f"Server {test_server.id} failed to respond to ping!")
+        logger.error("Server %s failed to respond to ping!", test_server.id)
         return False
 
-    print("All tests ok!")
+    logger.info("All tests ok!")
 
     return True
 
@@ -351,7 +363,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
         return None
 
     # Image downloaded, but is it the same as the current image on openstack?
-    print("Comparing downloaded image against openstack")
+    logger.info("Comparing downloaded image against openstack")
 
     if validate_raw_checksum(conn, filename, version):
 
@@ -363,15 +375,24 @@ def create_image(conn: openstack.connection.Connection, version: any,
             f.write(new_checksum)
 
 
-        print(f"Openstack already has the current version of {version['image_name']}")
+        logger.info("Openstack already has the current version of %s", version["image_name"])
+
+        current_img_id = next(
+            conn.image.images(
+                name=version["image_name"], owner=conn.current_project_id,
+                visibility=version["visibility"]
+                )
+            , None).id
+
+
+        delete_unused_images(conn, version["image_name"],current_img_id)
         return None
 
-    print("Uploading image")
+    logger.info("Uploading image")
 
     properties = version.get("properties", {})
     properties["description"] = "To find out which user to login with: ssh in as root."
-    properties["os_distro"] = version["distro"]
-    properties["os_type"] = version.get("os_type", "linux") # configures ephemeral drive formatting
+    properties.setdefault("os_type", "linux") # configures ephemeral drive formatting
 
     new_image = conn.create_image(
         name=version["image_name"],
@@ -385,10 +406,10 @@ def create_image(conn: openstack.connection.Connection, version: any,
     )
 
     if new_image is None:
-        print("An error occured while creating the image")
+        logger.error("An error occured while creating the image")
         return None
 
-    print(f"Image with id ({new_image.id}) created")
+    logger.info("Image with id (%s) created", new_image.id)
 
 
     # Test image
@@ -419,9 +440,11 @@ def delete_unused_images(conn: openstack.connection.Connection,
         if (next(conn.compute.servers(image=img.id, all_projects=True), None) is None and
             next(conn.block_storage.volumes(image_id=img.id, all_projects=True),None) is None):
             # not used by any server. good to delete.
+            logger.info("Deleting image %s", img.id)
             conn.delete_image(img.id)
         else:
             # used by someone. set to community
+            logger.info("Setting image %s to community", img.id)
             conn.image.update_image(img.id, visibility="community")
             still_using = True
 
@@ -458,6 +481,24 @@ def main() -> None:
 
     conn = openstack.connect(cloud=cloud)
 
+    logger.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter(
+        '%(asctime)s %(name)-12s [PID:%(process)d] %(levelname)-8s %(message)s'
+        )
+    streamhandler = logging.StreamHandler(sys.stdout)
+    streamhandler.setFormatter(formatter)
+    logger.addHandler(streamhandler)
+
+    log_file = os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}.log")
+
+    filehandler = logging.handlers.RotatingFileHandler(log_file, maxBytes=102400000)
+    filehandler.setFormatter(formatter)
+    logger.addHandler(filehandler)
+
+
+
+
     input_data = None
     with open("input.json", "r", encoding="utf-8") as f:
         input_data = json.load(f)
@@ -466,7 +507,7 @@ def main() -> None:
     for version in input_data["current"]:
         filename = version["image_url"].split("/")[-1]
 
-        print(f"=== {version['image_name']} ===")
+        logger.info("=== %s ===",version["image_name"])
 
         new_checksum = validate_checksum(version, filename, conn, cloud)
 
@@ -476,7 +517,7 @@ def main() -> None:
 
 
 
-        print(f"Downloading {version['image_name']}")
+        logger.info("Downloading %s", version["image_name"])
 
         new_image = create_image(conn, version, filename, new_checksum, network)
 
@@ -487,7 +528,7 @@ def main() -> None:
 
 
         # Everything is ok! Set visibility to what it should be
-        print(f"Setting image to {version['visibility']}")
+        logger.info("Setting image to %s",version['visibility'])
         conn.image.update_image(new_image.id, visibility=version["visibility"])
 
 
@@ -504,7 +545,7 @@ def main() -> None:
 
     for version in input_data["deprecated"]:
 
-        print(f"=== {version["image_name"]} ===")
+        logging.info("=== %s ===",version['image_name'])
 
         still_using = delete_unused_images(conn, version["image_name"])
 
@@ -515,15 +556,14 @@ def main() -> None:
             pass
 
         if not still_using:
-            print(f"{version['image_name']} removed completely")
+            logging.info("%s removed completely", version["image_name"])
         else:
-            print(f"{version['image_name']} is still used by someone so it is not fully removed")
+            logging.info("%s is still used by someone so it is not fully removed",
+                         version["image_name"])
 
         cleanup_files(version["filename"])
 
         print("")
-
-
 
 
 

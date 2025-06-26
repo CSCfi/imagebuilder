@@ -37,6 +37,10 @@ Set your environment variables as such:
 * IMAGEBUILDER_CLOUD should match your clouds.yaml cloud you would like to use
 * IMAGEBUILDER_NETWORK should match the default network the openstack project uses
 
+By default the program will log in your current directory under {cloud}.log if you wish to set your own log file set:
+* IMAGEBUILDER_LOG_FILE to the file where you wish to log
+
+
 Now the project is ready to be run!
 
 ## Examples:
@@ -54,10 +58,12 @@ input.json should look something like this.
     "current": [
         {
             "image_name": "Ubuntu-24.04",
-            "distro":"ubuntu",
             "visibility": "public",
             "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
-            "checksum_url": "https://cloud-images.ubuntu.com/noble/current/SHA256SUMS"
+            "checksum_url": "https://cloud-images.ubuntu.com/noble/current/SHA256SUMS",
+            "properties": {
+                "os_distro": "ubuntu"
+            }
         }
     ],
     "deprecated": [
