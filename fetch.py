@@ -207,7 +207,7 @@ def validate_checksum(version: any, filename: str,
                 visibility=version["visibility"]
                 )
             , None).id
-        logger.info("%s already up to date", version["image_name"])
+        logger.info("IMGBUILDER_OUTPUT OK %s already up to date", version["image_name"])
         # Delete unused if they exist
         delete_unused_images(conn, version["image_name"],current_img_id)
         return None
@@ -293,17 +293,21 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
             protocol='icmp'
         )
 
-
-    test_server = conn.create_server(
-        name=image.name+"_TESTSERVER",
-        image=image,
-        flavor="standard.tiny",
-        wait=True,
-        auto_ip=False,
-        network=network,
-        timeout=360,
-        security_groups=[secgroup.id],
-    )
+    try:
+        test_server = conn.create_server(
+            name=image.name+"_TESTSERVER",
+            image=image,
+            flavor="standard.tiny",
+            wait=True,
+            auto_ip=False,
+            network=network,
+            timeout=360,
+            security_groups=[secgroup.id],
+        )
+    except openstack.exceptions.SDKException as e:
+        logger.error("Server failed to be created!")
+        logger.error(e)
+        return False
 
     logger.info("Server with id (%s) created", test_server.id)
 
@@ -313,7 +317,6 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
 
     if found_test_server["status"] == "ERROR":
         conn.delete_server(test_server.id)
-        conn.network.delete_security_group(secgroup.id)
         logger.error("Server %s failed to start with image %s!", test_server.id, image.id)
         return False
 
@@ -375,7 +378,8 @@ def create_image(conn: openstack.connection.Connection, version: any,
             f.write(new_checksum)
 
 
-        logger.info("Openstack already has the current version of %s", version["image_name"])
+        logger.info("IMGBUILDER_OUTPUT OK Openstack already has the current version of %s",
+                    version["image_name"])
 
         current_img_id = next(
             conn.image.images(
@@ -453,6 +457,29 @@ def delete_unused_images(conn: openstack.connection.Connection,
     return still_using
 
 
+def configure_logging(log_file: str) -> None:
+    """
+    Configures logging to write to stdout and to log_file
+    This assumes you have a global logging instance named logger
+    """
+
+
+    logger.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter(
+        '%(asctime)s %(name)-12s [PID:%(process)d] %(levelname)-8s %(message)s'
+        )
+    streamhandler = logging.StreamHandler(sys.stdout)
+    streamhandler.setFormatter(formatter)
+    logger.addHandler(streamhandler)
+
+    filehandler = logging.handlers.RotatingFileHandler(log_file, maxBytes=102400000)
+    filehandler.setFormatter(formatter)
+    logger.addHandler(filehandler)
+
+
+
+
 
 
 
@@ -481,26 +508,19 @@ def main() -> None:
 
     conn = openstack.connect(cloud=cloud)
 
-    logger.setLevel(logging.DEBUG)
-
-    formatter = logging.Formatter(
-        '%(asctime)s %(name)-12s [PID:%(process)d] %(levelname)-8s %(message)s'
-        )
-    streamhandler = logging.StreamHandler(sys.stdout)
-    streamhandler.setFormatter(formatter)
-    logger.addHandler(streamhandler)
-
-    log_file = os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}.log")
-
-    filehandler = logging.handlers.RotatingFileHandler(log_file, maxBytes=102400000)
-    filehandler.setFormatter(formatter)
-    logger.addHandler(filehandler)
+    configure_logging(os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}.log"))
 
 
+    logger.info("===== %s =====", cloud)
+    logger.info("")
 
-
+    # Load file from argv
     input_data = None
-    with open("input.json", "r", encoding="utf-8") as f:
+    input_file = "input.json"
+    if len(sys.argv) > 1:
+        input_file = sys.argv[1]
+
+    with open(input_file, "r", encoding="utf-8") as f:
         input_data = json.load(f)
 
 
@@ -512,7 +532,7 @@ def main() -> None:
         new_checksum = validate_checksum(version, filename, conn, cloud)
 
         if new_checksum is None:
-            print("")
+            logger.info("")
             continue
 
 
@@ -522,7 +542,7 @@ def main() -> None:
         new_image = create_image(conn, version, filename, new_checksum, network)
 
         if new_image is None:
-            print("")
+            logger.info("")
             continue
 
 
@@ -540,7 +560,9 @@ def main() -> None:
                   "w",encoding="utf-8") as f:
             f.write(new_checksum)
 
-        print("")
+        logger.info("IMGBUILDER_OUTPUT OK %s has been successfully updated", version["image_name"])
+
+        logger.info("")
 
 
     for version in input_data["deprecated"]:

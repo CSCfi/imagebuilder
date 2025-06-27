@@ -47,10 +47,14 @@ Now the project is ready to be run!
 
 The script is run like this:
 ```bash
-IMAGEBUILDER_CLOUD="openstack" IMAGEBUILDER_NETWORK="project_1234" python3 fetch.py
+IMAGEBUILDER_CLOUD="openstack" IMAGEBUILDER_NETWORK="project_1234" python3 fetch.py input.json
+```
+If you wish to write your logs to a specific folder then run the script like this:
+```bash
+IMAGEBUILDER_CLOUD="openstack" IMAGEBUILDER_NETWORK="project_1234" IMAGEBUILDER_LOG_FILE="/path/to/cloud.log" python3 fetch.py input.json
 ```
 
-
+If an input file is not specified, input.json will be used
 
 input.json should look something like this.
 ```json
@@ -68,7 +72,7 @@ input.json should look something like this.
     ],
     "deprecated": [
         {
-            "image_name": "Ubuntu-24.04",
+            "image_name": "Ubuntu-18.04",
             "filename": "noble-server-cloudimg-amd64.img"
         }       
     ]
@@ -77,7 +81,8 @@ input.json should look something like this.
 ```
 
 The data in current also accepts custom properties for images. [Here's a list of all possible property values you can set](https://docs.openstack.org/glance/victoria/admin/useful-image-properties.html)
-Keep in mind that os_distro is managed by the distro field in your json file.
 
-The data in current can also have a field for "os_type" which can either be set to "linux" or "windows".
-By default it is set to "linux" so you only need to specify it if you are running Windows.
+If you are creating a non-Linux image, in data.current.properties set "os_type" to your operating system.
+As of writing Openstack allows these values to be "linux" or "windows".
+Setting it to something else will configure ephemeral drives to use fvat instead of ext4 (linux) or ntfs (windows).
+By default this script assumes you are creating a linux image unless something else is specified.
