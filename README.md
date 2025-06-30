@@ -11,6 +11,8 @@ If you wish for a verbose output of all openstack commands being ran set the var
 This project has been tested to work with Python version 3.12.3 but newer and versions down to 3.9 are very likely to work.
 
 ## Getting started:
+
+### Running imagebuilder in CLI:
 Install `qemu-utils` (Debian/Ubuntu) or `qemu-img` (AlmaLinux/CentOS/RHEL)
 It is required for converting images into RAW files
 
@@ -25,6 +27,20 @@ Install required packages from requirements.txt using pip in the virtual environ
 ```bash
 pip install -r requirements.txt
 ```
+
+### Running imagebuilder in a container (podman):
+Build the container with (requires root):
+```bash
+podman build --network host -t imagebuilder .
+```
+Run it with (requires root):
+```bash
+podman run --rm --network host \
+  -v ./checksums:/app/checksums -v ./tmp:/app/tmp -v ./secure.yaml:/app/secure.yaml -v ./input.json:/app/input.json \
+  -v /path/to/cloud.log:/app/cloud.log -e IMAGEBUILDER_CLOUD=openstack -e IMAGEBUILDER_NETWORK=project_1234 \
+  imagebuilder
+```
+
 
 Configure a clouds.yaml file according to your needs and place it in one of these 3:
  * the current directory

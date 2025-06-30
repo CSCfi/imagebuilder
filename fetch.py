@@ -74,11 +74,13 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
                 file_size = int(r.headers.get("content-length"))
                 progress = 0
 
-                disp_filename = filename[0:(int(os.get_terminal_size().columns*0.5)-1)]
-                if disp_filename != filename:
-                    disp_filename = disp_filename[:-3] + "..."
+                if print_progressbar:
+                    disp_filename = filename[0:(int(os.get_terminal_size().columns*0.5)-1)]
+                    if disp_filename != filename:
+                        disp_filename = disp_filename[:-3] + "..."
 
-                bar_width = min(50, int(os.get_terminal_size().columns - len(disp_filename) - 3))
+                    bar_width = min(50,
+                                    int(os.get_terminal_size().columns - len(disp_filename) - 3))
 
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
