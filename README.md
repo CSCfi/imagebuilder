@@ -28,7 +28,8 @@ Install required packages from requirements.txt using pip in the virtual environ
 pip install -r requirements.txt
 ```
 
-### Running imagebuilder in a container (podman):
+### Running imagebuilder in a container (podman/docker):
+Install required software (podman/docker)
 Build the container with (requires root):
 ```bash
 podman build --network host -t imagebuilder .
@@ -36,8 +37,8 @@ podman build --network host -t imagebuilder .
 Run it with (requires root):
 ```bash
 podman run --rm --network host \
-  -v ./checksums:/app/checksums -v ./tmp:/app/tmp -v ./secure.yaml:/app/secure.yaml -v ./input.json:/app/input.json \
-  -v /path/to/cloud.log:/app/cloud.log -e IMAGEBUILDER_CLOUD=openstack -e IMAGEBUILDER_NETWORK=project_1234 \
+  -v ./checksums:/app/checksums -v ./tmp:/app/tmp -v ./clouds.yaml:/app/clouds.yaml -v ./input.json:/app/input.json \
+  -v /path/to/cloud.log:/app/mycloud.log -e IMAGEBUILDER_CLOUD=mycloud -e IMAGEBUILDER_NETWORK=project_1234 \
   imagebuilder
 ```
 
@@ -63,11 +64,11 @@ Now the project is ready to be run!
 
 The script is run like this:
 ```bash
-IMAGEBUILDER_CLOUD="openstack" IMAGEBUILDER_NETWORK="project_1234" python3 fetch.py input.json
+IMAGEBUILDER_CLOUD="mycloud" IMAGEBUILDER_NETWORK="project_1234" python3 fetch.py input.json
 ```
 If you wish to write your logs to a specific folder then run the script like this:
 ```bash
-IMAGEBUILDER_CLOUD="openstack" IMAGEBUILDER_NETWORK="project_1234" IMAGEBUILDER_LOG_FILE="/path/to/cloud.log" python3 fetch.py input.json
+IMAGEBUILDER_CLOUD="mycloud" IMAGEBUILDER_NETWORK="project_1234" IMAGEBUILDER_LOG_FILE="/path/to/cloud.log" python3 fetch.py input.json
 ```
 
 If an input file is not specified, input.json will be used
