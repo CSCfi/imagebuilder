@@ -30,11 +30,11 @@ pip install -r requirements.txt
 
 ### Running imagebuilder in a container (podman/docker):
 Install required software (podman/docker)
-Build the container with (requires root):
+Build the container with:
 ```bash
 podman build --network host -t imagebuilder .
 ```
-Run it with (requires root):
+Run it with:
 ```bash
 podman run --rm --network host \
   -v ./checksums:/app/checksums -v ./tmp:/app/tmp -v ./clouds.yaml:/app/clouds.yaml -v ./input.json:/app/input.json \
