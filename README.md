@@ -53,6 +53,7 @@ Configure a clouds.yaml file according to your needs and place it in one of thes
 Set your environment variables as such:
 * IMAGEBUILDER_CLOUD should match your clouds.yaml cloud you would like to use
 * IMAGEBUILDER_NETWORK should match the default network the openstack project uses
+* IMAGEBUILDER_INPUT_FILE should match your input json file (defaults to input.json)
 
 By default the program will log in your current directory under {cloud}.log if you wish to set your own log file set:
 * IMAGEBUILDER_LOG_FILE to the file where you wish to log
@@ -64,11 +65,11 @@ Now the project is ready to be run!
 
 The script is run like this:
 ```bash
-IMAGEBUILDER_CLOUD="mycloud" IMAGEBUILDER_NETWORK="project_1234" python3 fetch.py input.json
+IMAGEBUILDER_CLOUD="mycloud" IMAGEBUILDER_NETWORK="project_1234" IMAGEBUILDER_INPUT_FILE="input.json" python3 fetch.py
 ```
 If you wish to write your logs to a specific folder then run the script like this:
 ```bash
-IMAGEBUILDER_CLOUD="mycloud" IMAGEBUILDER_NETWORK="project_1234" IMAGEBUILDER_LOG_FILE="/path/to/cloud.log" python3 fetch.py input.json
+IMAGEBUILDER_CLOUD="mycloud" IMAGEBUILDER_NETWORK="project_1234" IMAGEBUILDER_LOG_FILE="/path/to/cloud.log" python3 fetch.py
 ```
 
 If an input file is not specified, input.json will be used
@@ -96,6 +97,7 @@ input.json should look something like this.
 }
 
 ```
+Note that checksum_url is optional but highly recommended if available.
 
 The data in current also accepts custom properties for images. [Here's a list of all possible property values you can set](https://docs.openstack.org/glance/victoria/admin/useful-image-properties.html)
 

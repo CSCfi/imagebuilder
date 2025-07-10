@@ -16,7 +16,7 @@ import hashlib
 import requests
 import openstack
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 
 def get_file_hash(filename: str, cur_hash: hashlib._hashlib.HASH) -> str:
     """
@@ -47,7 +47,7 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
     cur_hash = get_file_hash("tmp/"+filename, hashlib.sha256())
     if cur_hash != "" and cur_hash in new_checksum.lower():
 
-        logger.info("File already exists on disk.")
+        logger.info("The newest version of %s already exists on disk.", filename)
 
         # Local file exists but raw doesn't, create one
         if not os.path.exists("tmp/"+filename+".raw"):
@@ -98,12 +98,12 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
 
 
         new_hash = get_file_hash("tmp/"+filename, hashlib.sha256())
-        if new_hash != "" and new_hash not in new_checksum.lower():
-            logger.error("Checksum of the new file does not match!")
+        if (new_hash != "" and new_hash not in new_checksum.lower()) and new_checksum != filename:
+            logger.error("Checksum of %s does not match the one downloaded!", filename)
             cleanup_files(filename)
             return False
 
-        logger.info("Converting to .raw")
+        logger.info("Converting %s to .raw", filename)
 
         # Convert to raw
         os.system(f"qemu-img convert {'-p' if print_progressbar else ''}\
@@ -159,7 +159,7 @@ def validate_checksum(version: any, filename: str,
         with open(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
                   "r", encoding="utf-8") as f:
             old_checksum = f.read()
-    else:
+    elif version.get("checksum_url"):
         logger.warning("Checksum file for %s_%s does not exist. Creating one",
                         cloud, version["image_name"])
 
@@ -168,6 +168,10 @@ def validate_checksum(version: any, filename: str,
         logger.info("Skipping checksum fetching...")
         return old_checksum # Should something else be returned?
 
+    if not version.get("checksum_url"):
+        logger.info("Checksum URL not specified for %s. Skipping checksum fetching...",
+                     version["image_name"])
+        return filename
 
 
     error = False
@@ -203,15 +207,23 @@ def validate_checksum(version: any, filename: str,
 
     if new_checksum == old_checksum and validate_raw_checksum(conn, filename, version):
 
-        current_img_id = next(
-            conn.image.images(
+        current_images = list(conn.image.images(
                 name=version["image_name"], owner=conn.current_project_id,
-                visibility=version["visibility"]
-                )
-            , None).id
-        logger.info("IMGBUILDER_OUTPUT OK %s already up to date", version["image_name"])
-        # Delete unused if they exist
-        delete_unused_images(conn, version["image_name"],current_img_id)
+                visibility=version["visibility"],
+                sort_key='created_at',
+                sort_dir='desc'
+        ))
+
+        current_img_id = current_images[0].id if current_images else None
+
+        if len(current_images) > 1:
+            logger.warning("MORE THAN 1 image for %s already exists", version["image_name"])
+        else:
+
+            logger.info("IMGBUILDER_OUTPUT OK %s already up to date", version["image_name"])
+            # Delete unused if they exist
+            delete_unused_images(conn, version["image_name"],current_img_id)
+
         return None
 
 
@@ -278,7 +290,8 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
 
     logger.info("Testing newly created image")
 
-    secgroup = conn.network.find_security_group("IMAGEBUILDER_PING_TEST")
+    secgroup = conn.network.find_security_group("IMAGEBUILDER_PING_TEST",
+                                                project_id=conn.current_project.id)
 
     if secgroup is None:
         secgroup = conn.network.create_security_group(name="IMAGEBUILDER_PING_TEST")
@@ -373,11 +386,12 @@ def create_image(conn: openstack.connection.Connection, version: any,
     if validate_raw_checksum(conn, filename, version):
 
         # Everything is ok so write the checksum pre-emptively
-        with open(
-                f"checksums/{conn.config.name}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
-                "w", encoding="utf-8"
-                ) as f:
-            f.write(new_checksum)
+        if new_checksum != filename:
+            with open(
+                    f"checksums/{conn.config.name}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
+                    "w", encoding="utf-8"
+                    ) as f:
+                f.write(new_checksum)
 
 
         logger.info("IMGBUILDER_OUTPUT OK Openstack already has the current version of %s",
@@ -466,7 +480,7 @@ def configure_logging(log_file: str) -> None:
     """
 
 
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     formatter = logging.Formatter(
         '%(asctime)s %(name)-12s [PID:%(process)d] %(levelname)-8s %(message)s'
@@ -518,9 +532,7 @@ def main() -> None:
 
     # Load file from argv
     input_data = None
-    input_file = "input.json"
-    if len(sys.argv) > 1:
-        input_file = sys.argv[1]
+    input_file = os.getenv("IMAGEBUILDER_INPUT_FILE", "input.json")
 
     with open(input_file, "r", encoding="utf-8") as f:
         input_data = json.load(f)
@@ -558,9 +570,10 @@ def main() -> None:
         # Remove old ones
         delete_unused_images(conn, version["image_name"], new_image.id)
 
-        with open(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
-                  "w",encoding="utf-8") as f:
-            f.write(new_checksum)
+        if new_checksum != filename:
+            with open(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
+                    "w",encoding="utf-8") as f:
+                f.write(new_checksum)
 
         logger.info("IMGBUILDER_OUTPUT OK %s has been successfully updated", version["image_name"])
 
@@ -589,6 +602,8 @@ def main() -> None:
 
         print("")
 
+
+    logger.info("===============")
 
 
 if __name__=="__main__":
