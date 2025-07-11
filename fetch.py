@@ -16,7 +16,77 @@ import hashlib
 import requests
 import openstack
 
-logger = logging.getLogger()
+
+
+class ExitCodeLogger:
+    """
+    Set value for exitting the program
+    0 = OK
+    1 = Warning
+    2 = Error
+    """
+
+    def __init__(self) -> None:
+        """
+        Init to ok
+        """
+        self._code = 0
+        self._log = logging.getLogger("imagebuilder")
+
+    def warning(self, msg: str, *args, **kwargs) -> None:
+        """
+        Set code to warning and log the message
+        """
+        self._code = max(self._code, 1)
+        self._log.warning(msg, *args, **kwargs)
+
+
+    def error(self, msg: str, *args, **kwargs) -> None:
+        """
+        Set code to error and log the message
+        """
+        self._code = 2
+        self._log.error(msg, *args, **kwargs)
+
+
+    def info(self, msg: str, *args, **kwargs) -> None:
+        """
+        Same as logging.info
+        """
+        self._log.info(msg, *args, **kwargs)
+
+
+    def configure_logging(self, log_file: str) -> None:
+        """
+        Configures logging to write to stdout and to log_file
+        """
+
+
+        self._log.setLevel(logging.INFO)
+
+        formatter = logging.Formatter(
+            '%(asctime)s %(name)-12s [PID:%(process)d] %(levelname)-8s %(message)s'
+            )
+        streamhandler = logging.StreamHandler(sys.stdout)
+        streamhandler.setFormatter(formatter)
+        self._log.addHandler(streamhandler)
+
+        filehandler = logging.handlers.RotatingFileHandler(log_file, maxBytes=102400000)
+        filehandler.setFormatter(formatter)
+        self._log.addHandler(filehandler)
+
+
+
+    @property
+    def exit_code(self) -> int:
+        """
+        Return the set code
+        """
+        return self._code
+
+
+logger = ExitCodeLogger()
+
 
 def get_file_hash(filename: str, cur_hash: hashlib._hashlib.HASH) -> str:
     """
@@ -387,8 +457,10 @@ def create_image(conn: openstack.connection.Connection, version: any,
 
         # Everything is ok so write the checksum pre-emptively
         if new_checksum != filename:
+
+            img_name = version['image_name'].replace(' ', '_')
             with open(
-                    f"checksums/{conn.config.name}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
+                    f"checksums/{conn.config.name}_{img_name}_CHECKSUM",
                     "w", encoding="utf-8"
                     ) as f:
                 f.write(new_checksum)
@@ -473,25 +545,6 @@ def delete_unused_images(conn: openstack.connection.Connection,
     return still_using
 
 
-def configure_logging(log_file: str) -> None:
-    """
-    Configures logging to write to stdout and to log_file
-    This assumes you have a global logging instance named logger
-    """
-
-
-    logger.setLevel(logging.INFO)
-
-    formatter = logging.Formatter(
-        '%(asctime)s %(name)-12s [PID:%(process)d] %(levelname)-8s %(message)s'
-        )
-    streamhandler = logging.StreamHandler(sys.stdout)
-    streamhandler.setFormatter(formatter)
-    logger.addHandler(streamhandler)
-
-    filehandler = logging.handlers.RotatingFileHandler(log_file, maxBytes=102400000)
-    filehandler.setFormatter(formatter)
-    logger.addHandler(filehandler)
 
 
 
@@ -524,7 +577,7 @@ def main() -> None:
 
     conn = openstack.connect(cloud=cloud)
 
-    configure_logging(os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}.log"))
+    logger.configure_logging(os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}.log"))
 
 
     logger.info("===== %s =====", cloud)
@@ -608,3 +661,4 @@ def main() -> None:
 
 if __name__=="__main__":
     main()
+    sys.exit(logger.exit_code)

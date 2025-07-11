@@ -69,7 +69,7 @@ IMAGEBUILDER_CLOUD="mycloud" IMAGEBUILDER_NETWORK="project_1234" IMAGEBUILDER_IN
 ```
 If you wish to write your logs to a specific folder then run the script like this:
 ```bash
-IMAGEBUILDER_CLOUD="mycloud" IMAGEBUILDER_NETWORK="project_1234" IMAGEBUILDER_LOG_FILE="/path/to/cloud.log" python3 fetch.py
+IMAGEBUILDER_CLOUD="mycloud" IMAGEBUILDER_NETWORK="project_1234" IMAGEBUILDER_INPUT_FILE="input.json" IMAGEBUILDER_LOG_FILE="/path/to/cloud.log" python3 fetch.py
 ```
 
 If an input file is not specified, input.json will be used

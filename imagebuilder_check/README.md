@@ -6,3 +6,5 @@ IMAGEBUILDER_CHECK_CLOUD="mycloud" IMAGEBUILDER_CHECK_FILE="mycloud.log" python3
 ```
 
 Multiple clouds in a single log file are supported.
+
+If a run has not happened in the interval of WAITED_FOR_TOO_LONG then an error will be thrown

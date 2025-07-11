@@ -2,6 +2,7 @@
 """
 Reads and analyses the logs for imagebuilder
 """
+from datetime import datetime
 import os
 import sys
 
@@ -9,25 +10,7 @@ NAGIOS_STATE_OK             = 0
 NAGIOS_STATE_WARNING        = 1
 NAGIOS_STATE_CRITICAL       = 2
 
-
-
-
-def get_start(lines: str, cloud:str) -> int:
-    """
-    Finds the indices of the first and last line of th
-    """
-
-    for line in reversed(lines):
-        if f"===== {cloud} =====" in line:
-            return lines.index(line)
-
-
-    print("No runs in the log files")
-    sys.exit(NAGIOS_STATE_OK)
-
-
-
-
+WAITED_FOR_TOO_LONG = 90000 # 25 hours
 
 
 
@@ -57,9 +40,28 @@ def main() -> None:
         sys.exit(NAGIOS_STATE_CRITICAL)
 
 
-    start = get_start(lines, cloud)
+
+
+    for line in reversed(lines):
+        if f"===== {cloud} =====" in line:
+            start = lines.index(line)
+            break
+
+    else:
+        print("No runs in the log files!")
+        sys.exit(NAGIOS_STATE_CRITICAL)
+
+
+
 
     lines = lines[start::]
+
+    last_ran = datetime.strptime(lines[0].split(",")[0], "%Y-%m-%d %H:%M:%S")
+    if (datetime.now() - last_ran).seconds > WAITED_FOR_TOO_LONG:
+        print("Imagebuilder has not been run in a while!")
+        sys.exit(NAGIOS_STATE_CRITICAL)
+
+
 
     nagios_state = NAGIOS_STATE_OK
     nagios_output = ""
