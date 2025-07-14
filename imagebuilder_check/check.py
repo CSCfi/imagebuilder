@@ -78,7 +78,7 @@ def main() -> None:
         nagios_state = NAGIOS_STATE_CRITICAL if "ERROR" in line else nagios_state
 
 
-        if "INFO" in line and (line.split("INFO")[-1]).strip() == "":
+        if "INFO" in line and not ("===" in line or "IMGBUILDER_OUTPUT" in line):
             continue
 
         nagios_output += line

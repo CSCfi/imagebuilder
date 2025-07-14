@@ -222,6 +222,15 @@ def validate_checksum(version: any, filename: str,
                       conn: openstack.connection.Connection, cloud: str) -> str | None:
     """
     Validates checksums to check if an image requires updating
+    
+    Returns
+    -------
+    str
+        A new checksum that's fetched online from version.checksum_url
+        If checksum_url is not specified within version, the filename will be returned
+
+    None
+        If any critical error occures None is returned.
     """
 
     old_checksum = None
@@ -230,13 +239,9 @@ def validate_checksum(version: any, filename: str,
                   "r", encoding="utf-8") as f:
             old_checksum = f.read()
     elif version.get("checksum_url"):
-        logger.warning("Checksum file for %s_%s does not exist. Creating one",
+        logger.info("Checksum file for %s_%s does not exist. Creating one",
                         cloud, version["image_name"])
 
-
-    if os.getenv("IMAGEBUILDER_SKIP_CHECKSUM") is not None and old_checksum is not None:
-        logger.info("Skipping checksum fetching...")
-        return old_checksum # Should something else be returned?
 
     if not version.get("checksum_url"):
         logger.info("Checksum URL not specified for %s. Skipping checksum fetching...",
@@ -517,7 +522,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
 
 
 def delete_unused_images(conn: openstack.connection.Connection,
-                         name: str, skip: int = None) -> bool:
+                         name: str, skip: str = None) -> bool:
     """
     Delete unused images but skip specified image if provided
     """
@@ -531,10 +536,10 @@ def delete_unused_images(conn: openstack.connection.Connection,
         # Check if image is unused
         if (next(conn.compute.servers(image=img.id, all_projects=True), None) is None and
             next(conn.block_storage.volumes(image_id=img.id, all_projects=True),None) is None):
-            # not used by any server. good to delete.
+            # Not used by any server nor volume
             logger.info("Deleting image %s", img.id)
             conn.delete_image(img.id)
-        else:
+        elif img.visibility != "community":
             # used by someone. set to community
             logger.info("Setting image %s to community", img.id)
             conn.image.update_image(img.id, visibility="community")
@@ -651,7 +656,8 @@ def main() -> None:
             logging.info("%s is still used by someone so it is not fully removed",
                          version["image_name"])
 
-        cleanup_files(version["filename"])
+        if version.get("filename"):
+            cleanup_files(version["filename"])
 
         print("")
 

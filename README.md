@@ -5,7 +5,6 @@ Fetches and deprecates images for openstack. Images to be fetched/deprecated can
 Please remember to define IMAGEBUILDER_CLOUD and IMAGEBUILDER_NETWORK in your shell.
 
 If you wish to disable ping tests, set the environment variable IMAGEBUILDER_DISABLE_PINGING to anything
-If you wish to skip fetching new checksums, set the environment variable IMAGEBUILDER_SKIP_CHECKSUM to anything
 If you wish for a verbose output of all openstack commands being ran set the variable IMAGEBUILDER_DEBUG to anything
 
 This project has been tested to work with Python version 3.12.3 but newer and versions down to 3.9 are very likely to work.
@@ -98,6 +97,8 @@ input.json should look something like this.
 
 ```
 Note that checksum_url is optional but highly recommended if available.
+
+Deprecated.filename is optional to use. Use it if you believe that there might still be files on disk.
 
 The data in current also accepts custom properties for images. [Here's a list of all possible property values you can set](https://docs.openstack.org/glance/victoria/admin/useful-image-properties.html)
 
