@@ -81,6 +81,10 @@ class ExitCodeLogger:
     def exit_code(self) -> int:
         """
         Return the set code
+        Returns
+        -------
+        int
+            Current exit code        
         """
         return self._code
 
@@ -92,6 +96,12 @@ def get_file_hash(filename: str, cur_hash: hashlib._hashlib.HASH) -> str:
     """
     Calculate the hash of a file chunked
     Returns the hexdigest in lowercase
+
+    Returns
+    -------
+    str
+        Hash of filename in the format of cur_hash
+        Empty string if file does not exist
     """
 
     if not os.path.exists(filename):
@@ -109,6 +119,12 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
     """
     Downloads a file from a specified url using chucking
     Also converts it to a .raw file
+
+    Returns
+    -------
+    bool
+        True if everything is successful
+        False if something goes wrong
     """
 
     print_progressbar = sys.stdout.isatty()
@@ -201,6 +217,12 @@ def validate_raw_checksum(conn: openstack.connection.Connection,
     """
     Compares the currently existing raw file's md5 checksum to the one on openstack.
     Returns true if they match
+
+    Returns
+    -------
+    bool
+        True if the MD5 hash of the local raw file is the same as the current one on openstack
+        False otherwise
     """
     cur_img = next(conn.image.images(
                             name=version["image_name"],
@@ -310,6 +332,12 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
     """
     Test if the newly built image can be pinged by attaching it to a network
     Creates a router, interface and a floating ip which get cleaned up
+
+    Returns
+    -------
+    bool
+        True if the test server can be pinged properly
+        False if an error is detected
     """
 
     if os.getenv("IMAGEBUILDER_DISABLE_PINGING") is not None:
@@ -361,6 +389,11 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
 def test_image(conn: openstack.connection.Connection, image: any, network: str) -> bool:
     """
     Test the newly created image by creating a test server and pinging it
+    Returns
+    -------
+    bool
+        True if the server can be created and pinged
+        False if errors are detected    
     """
 
     logger.info("Testing newly created image")
@@ -448,6 +481,12 @@ def create_image(conn: openstack.connection.Connection, version: any,
                  filename: str, new_checksum: str, network: str) -> any:
     """
     Creates an image
+
+    Returns
+    -------
+    any:
+        If everything is successful the newly created image is returned.
+        If the image is already up to date or if there's an error None is returned    
     """
 
     # Download image
@@ -525,6 +564,12 @@ def delete_unused_images(conn: openstack.connection.Connection,
                          name: str, skip: str = None) -> bool:
     """
     Delete unused images but skip specified image if provided
+
+    Returns
+    -------
+    bool
+        True if the image is used by someone
+        False if the image was fully deleted
     """
 
     still_using = False
