@@ -51,7 +51,7 @@ class ExitCodeLogger:
 
     def info(self, msg: str, *args, **kwargs) -> None:
         """
-        Same as logging.info
+        Same as logger.info
         """
         self._log.info(msg, *args, **kwargs)
 
@@ -62,7 +62,7 @@ class ExitCodeLogger:
         """
 
 
-        self._log.setLevel(logging.INFO)
+        self._log.setLevel(logger.info)
 
         formatter = logging.Formatter(
             '%(asctime)s %(name)-12s [PID:%(process)d] %(levelname)-8s %(message)s'
@@ -224,19 +224,24 @@ def validate_raw_checksum(conn: openstack.connection.Connection,
         True if the MD5 hash of the local raw file is the same as the current one on openstack
         False otherwise
     """
-    cur_img = next(conn.image.images(
+    checksum_matches = False
+
+    images = list(conn.image.images(
                             name=version["image_name"],
                             owner=conn.current_project_id,
                             visibility=version["visibility"]
-                    ), None)
+                    ))
+
+    for cur_img in images:
+        if (cur_img.checksum.lower() == get_file_hash("tmp/"+filename+".raw", hashlib.md5())):
+            checksum_matches = True
 
 
-    if (cur_img is not None and
-        cur_img.checksum.lower() == get_file_hash("tmp/"+filename+".raw", hashlib.md5())):
-        return True
+    if len(images) > 1:
+        logger.warning("More than 1 image for %s already exists", version["image_name"])
 
 
-    return False
+    return checksum_matches
 
 
 
@@ -314,7 +319,7 @@ def validate_checksum(version: any, filename: str,
         current_img_id = current_images[0].id if current_images else None
 
         if len(current_images) > 1:
-            logger.warning("MORE THAN 1 image for %s already exists", version["image_name"])
+            logger.warning("More than 1 image for %s already exists", version["image_name"])
         else:
 
             logger.info("IMGBUILDER_OUTPUT OK %s already up to date", version["image_name"])
@@ -568,7 +573,7 @@ def delete_unused_images(conn: openstack.connection.Connection,
     Returns
     -------
     bool
-        True if the image is used by someone
+        True if at least one old version of the image is still used by a server or a volume
         False if the image was fully deleted
     """
 
@@ -685,7 +690,7 @@ def main() -> None:
 
     for version in input_data["deprecated"]:
 
-        logging.info("=== %s ===",version['image_name'])
+        logger.info("=== %s ===",version['image_name'])
 
         still_using = delete_unused_images(conn, version["image_name"])
 
@@ -696,15 +701,15 @@ def main() -> None:
             pass
 
         if not still_using:
-            logging.info("%s removed completely", version["image_name"])
+            logger.info("%s removed completely", version["image_name"])
         else:
-            logging.info("%s is still used by someone so it is not fully removed",
+            logger.info("%s is still used by someone so it is not fully removed",
                          version["image_name"])
 
         if version.get("filename"):
             cleanup_files(version["filename"])
 
-        print("")
+        logger.info("")
 
 
     logger.info("===============")
