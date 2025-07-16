@@ -62,7 +62,7 @@ class ExitCodeLogger:
         """
 
 
-        self._log.setLevel(logger.info)
+        self._log.setLevel(logging.INFO)
 
         formatter = logging.Formatter(
             '%(asctime)s %(name)-12s [PID:%(process)d] %(levelname)-8s %(message)s'
