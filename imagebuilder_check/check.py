@@ -102,7 +102,12 @@ def main() -> None:
         nagios_state = NAGIOS_STATE_CRITICAL if "ERROR" in line else nagios_state
 
 
-        if "INFO" in line and not ("===" in line or "IMGBUILDER_OUTPUT" in line):
+        if "INFO" in line and not (
+            "===" in line or
+            "IMGBUILDER_OUTPUT" in line or
+            "removed completely" in line or
+            "is still used by someone" in line
+            ):
             continue
 
         if "INFO" in line and "===" in line and "====" not in line:
