@@ -14,34 +14,31 @@ NAGIOS_STATE_CRITICAL       = 2
 WAITED_FOR_TOO_LONG = 90000 # 25 hours
 
 
-def get_lines(filename: str, cloud: str) -> list:
+
+def get_run_data(filename: str, cloud: str) -> dict:
     """
     Loads filename and finds the last run of cloud
-    
+
     Returns
     -------
-    list[str]
-        List of lines from filename starting at the last run of cloud
+    dict
+        Dictionary containing the data of the last run
     """
-
+    json_data = None
     try:
-        with open(filename, "r", encoding="UTF-8") as f:
-            lines = f.readlines()
+        with open(filename, "r", encoding="utf-8") as f:
+            json_data = json.load(f)
     except IOError as e:
         print(f"Failed to open file: {e}")
         sys.exit(NAGIOS_STATE_CRITICAL)
 
-
-
-
-    for line in reversed(lines):
-        if f"===== {cloud} =====" in line:
-            start = lines.index(line)
-            return lines[start::]
-
+    for run in reversed(json_data):
+        if run["cloud"] == cloud:
+            return run
 
     print("No runs in the log files!")
     sys.exit(NAGIOS_STATE_CRITICAL)
+
 
 
 
@@ -63,75 +60,77 @@ def main() -> None:
             if os.getenv(x) is None
             ]
 
-        raise EnvironmentError(f"Environtment variables are not set! ({', '.join(missing)})")
+        raise EnvironmentError(f"Environment variables are not set! ({', '.join(missing)})")
 
 
-    json_data = None
+    input_json_data = None
     with open(input_json, "r", encoding="utf-8") as f:
-        json_data = json.load(f)
+        input_json_data = json.load(f)
 
-    if json_data is None:
+    if input_json_data is None:
         print(f"Failed to read json file: {input_json}")
         sys.exit(NAGIOS_STATE_CRITICAL)
 
-    images = [v["image_name"] for s in ("current", "deprecated") for v in json_data[s]]
-    seen_images = []
+
+    run_data = get_run_data(filename, cloud)
 
 
-    lines = get_lines(filename, cloud)
+    if (
+        datetime.now() - datetime.strptime(run_data["start_timestamp"], "%Y-%m-%d %H:%M:%S.%f")
+        ).seconds > WAITED_FOR_TOO_LONG:
 
-    last_ran = datetime.strptime(lines[0].split(",")[0], "%Y-%m-%d %H:%M:%S")
-    if (datetime.now() - last_ran).seconds > WAITED_FOR_TOO_LONG:
         print("Imagebuilder has not been run in a while!")
         sys.exit(NAGIOS_STATE_CRITICAL)
-
 
 
     nagios_state = NAGIOS_STATE_OK
     nagios_output = ""
 
+    for arr in ("current", "deprecated"):
 
-    for line in lines:
-        # End marker
-        if "===============" in line:
-            break
-
-        if nagios_state != NAGIOS_STATE_CRITICAL and "WARNING" in line:
-            nagios_state = NAGIOS_STATE_WARNING
-
-        nagios_state = NAGIOS_STATE_CRITICAL if "ERROR" in line else nagios_state
+        images = [v["image_name"] for v in input_json_data[arr]]
+        seen_images = []
 
 
-        if "INFO" in line and not (
-            "===" in line or
-            "IMGBUILDER_OUTPUT" in line or
-            "removed completely" in line or
-            "is still used by someone" in line
-            ):
-            continue
+        for img in run_data[arr]:
+            nagios_output += f"=== {img} ===\n"
+            seen_images.append(img)
 
-        if "INFO" in line and "===" in line and "====" not in line:
-            seen_images.append(
-                (line.split("===")[1]).strip()
+            for timestamp in run_data[arr][img]:
+                msg = run_data[arr][img][timestamp]
+
+                if msg["level"] == "WARNING":
+                    if nagios_state != NAGIOS_STATE_CRITICAL:
+                        nagios_state = NAGIOS_STATE_WARNING
+                    nagios_output += msg["content"] + "\n"
+
+                elif msg["level"] == "ERROR":
+                    nagios_state = NAGIOS_STATE_CRITICAL
+                    nagios_output += msg["content"] + "\n"
+
+                elif msg.get("important"):
+                    nagios_output += msg["content"] + "\n"
+
+
+
+        if set(images) - set(seen_images): # Not seen
+            nagios_output += (
+                f"Images not seen in the output that should've been there ({arr}): "
+                f"{set(images) - set(seen_images)}\n"
             )
+            nagios_state = NAGIOS_STATE_CRITICAL
 
-        nagios_output += line
+        if set(seen_images) - set(images): # Extra images
+            nagios_output += (
+                f"Images seen that were not supposed to be there ({arr}): "
+                f"{set(seen_images) - set(images)}\n"
+            )
+            nagios_state = NAGIOS_STATE_CRITICAL
+
+
 
 
     print(nagios_output)
-
-    not_seen_images = set(images) - set(seen_images)
-    extra_images = set(seen_images) - set(images)
-
-    if not_seen_images:
-        print(f"Images not seen in the output that should've been there: {not_seen_images}")
-        nagios_state = NAGIOS_STATE_CRITICAL
-
-    if extra_images:
-        print(f"Images seen that were not supposed to be there: {extra_images}")
-        nagios_state = NAGIOS_STATE_CRITICAL
-
-
     sys.exit(nagios_state)
 
 

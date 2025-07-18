@@ -7,73 +7,126 @@ For more details refer to README.md
 
 
 """
+from datetime import datetime
 import sys
 import os
 import json
-import logging
-import logging.handlers
 import hashlib
 import requests
 import openstack
 
 
 
-class ExitCodeLogger:
+class ImgBuildLogger:
     """
-    Set value for exitting the program
+    Set value for exitting the program and handle logging
     0 = OK
     1 = Warning
     2 = Error
     """
+
+    # Rotates logs with this
+    MAX_LOG_SIZE = 5000
 
     def __init__(self) -> None:
         """
         Init to ok
         """
         self._code = 0
-        self._log = logging.getLogger("imagebuilder")
+        self._log = {
+            "start_timestamp": str(datetime.now()),
+            "PID": os.getpid(),
+            "cloud": None,
+            "current": {},
+            "deprecated": {}
+        }
+        self._cur_write = self._log["current"]
+        self._cur_img = None
 
-    def warning(self, msg: str, *args, **kwargs) -> None:
+
+    def start_deprecated(self) -> None:
+        """
+        Starts to fill log.deprecated instead of log.current
+        """
+        self._cur_write = self._log["deprecated"]
+
+
+    def set_image(self, image: str) -> None:
+        """
+        Sets the current image that's being written
+        """
+        self._cur_img = image
+        self._cur_write[self._cur_img] = self._cur_write.get(self._cur_img, {})
+        print(f"=== {image} ===")
+
+    def set_cloud(self, cloud: str) -> None:
+        """
+        Sets the cloud variable for the log
+        """
+        self._log["cloud"] = cloud
+
+
+    def _write_log(self, msg: str, level: str, important: bool = False) -> None:
+        """
+        Helper function that writes the messages into the log
+        """
+        message = {
+            "level" : level,
+            "content" : msg
+        }
+
+        if important:
+            message["important"] = True
+
+        self._cur_write[self._cur_img][str(datetime.now())] = message
+        print(f"{level}: {msg}")
+
+
+    def warning(self, msg: str) -> None:
         """
         Set code to warning and log the message
         """
         self._code = max(self._code, 1)
-        self._log.warning(msg, *args, **kwargs)
+        self._write_log(msg, "WARNING")
 
-
-    def error(self, msg: str, *args, **kwargs) -> None:
+    def error(self, msg: str) -> None:
         """
         Set code to error and log the message
         """
         self._code = 2
-        self._log.error(msg, *args, **kwargs)
+        self._write_log(msg, "ERROR")
 
 
-    def info(self, msg: str, *args, **kwargs) -> None:
+    def info(self, msg: str, important: bool = False) -> None:
         """
         Same as logger.info
         """
-        self._log.info(msg, *args, **kwargs)
+        self._write_log(msg, "INFO", important)
 
 
-    def configure_logging(self, log_file: str) -> None:
+    def write_log(self, log_file: str) -> None:
         """
-        Configures logging to write to stdout and to log_file
+        Writes the current log buffer into a file and rotates logs
         """
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                current_log_data= json.load(f)
+
+        except FileNotFoundError:
+            current_log_data = []
+
+        except json.decoder.JSONDecodeError:
+            current_log_data = []
 
 
-        self._log.setLevel(logging.INFO)
+        current_log_data.append(self._log)
 
-        formatter = logging.Formatter(
-            '%(asctime)s %(name)-12s [PID:%(process)d] %(levelname)-8s %(message)s'
-            )
-        streamhandler = logging.StreamHandler(sys.stdout)
-        streamhandler.setFormatter(formatter)
-        self._log.addHandler(streamhandler)
+        current_log_data = current_log_data[-self.MAX_LOG_SIZE:]
 
-        filehandler = logging.handlers.RotatingFileHandler(log_file, maxBytes=102400000)
-        filehandler.setFormatter(formatter)
-        self._log.addHandler(filehandler)
+        with open(log_file, "w", encoding="utf-8") as f:
+            json.dump(current_log_data, f)
+
+
 
 
 
@@ -89,7 +142,7 @@ class ExitCodeLogger:
         return self._code
 
 
-logger = ExitCodeLogger()
+logger = ImgBuildLogger()
 
 
 def get_file_hash(filename: str, cur_hash: hashlib._hashlib.HASH) -> str:
@@ -133,7 +186,7 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
     cur_hash = get_file_hash("tmp/"+filename, hashlib.sha256())
     if cur_hash != "" and cur_hash in new_checksum.lower():
 
-        logger.info("The newest version of %s already exists on disk.", filename)
+        logger.info(f"The newest version of {filename} already exists on disk.")
 
         # Local file exists but raw doesn't, create one
         if not os.path.exists("tmp/"+filename+".raw"):
@@ -185,11 +238,11 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
 
         new_hash = get_file_hash("tmp/"+filename, hashlib.sha256())
         if (new_hash != "" and new_hash not in new_checksum.lower()) and new_checksum != filename:
-            logger.error("Checksum of %s does not match the one downloaded!", filename)
+            logger.error(f"Checksum of {filename} does not match the one downloaded!")
             cleanup_files(filename)
             return False
 
-        logger.info("Converting %s to .raw", filename)
+        logger.info(f"Converting {filename} to .raw")
 
         # Convert to raw
         os.system(f"qemu-img convert {'-p' if print_progressbar else ''}\
@@ -198,13 +251,13 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
         return True
 
     except requests.exceptions.HTTPError:
-        logger.error("HTTP error while downloading %s",filename)
+        logger.error(f"HTTP error while downloading {filename}")
 
     except requests.exceptions.ReadTimeout:
-        logger.error("Download for %s timed out", filename)
+        logger.error(f"Download for {filename} timed out")
 
     except requests.exceptions.ConnectionError:
-        logger.error("Unable to download %s", filename)
+        logger.error(f"Unable to download {filename}")
 
 
     return False
@@ -233,12 +286,12 @@ def validate_raw_checksum(conn: openstack.connection.Connection,
                     ))
 
     for cur_img in images:
-        if (cur_img.checksum.lower() == get_file_hash("tmp/"+filename+".raw", hashlib.md5())):
+        if cur_img.checksum.lower() == get_file_hash("tmp/"+filename+".raw", hashlib.md5()):
             checksum_matches = True
 
 
     if len(images) > 1:
-        logger.warning("More than 1 image for %s already exists", version["image_name"])
+        logger.warning(f"More than 1 image for {version["image_name"]} already exists")
 
 
     return checksum_matches
@@ -266,13 +319,15 @@ def validate_checksum(version: any, filename: str,
                   "r", encoding="utf-8") as f:
             old_checksum = f.read()
     elif version.get("checksum_url"):
-        logger.info("Checksum file for %s_%s does not exist. Creating one",
-                        cloud, version["image_name"])
+        logger.info(
+            f"Checksum file for {cloud}_{version['image_name']} does not exist. Creating one"
+            )
 
 
     if not version.get("checksum_url"):
-        logger.info("Checksum URL not specified for %s. Skipping checksum fetching...",
-                     version["image_name"])
+        logger.info(
+            f"Checksum URL not specified for {version['image_name']}. Skipping checksum fetching..."
+            )
         return filename
 
 
@@ -292,19 +347,19 @@ def validate_checksum(version: any, filename: str,
 
     except requests.exceptions.HTTPError:
         error = True
-        logger.error("HTTP error while downloading checksum for %s", version["image_name"])
+        logger.error(f"HTTP error while downloading checksum for {version['image_name']}")
 
     except requests.exceptions.ReadTimeout:
         error = True
-        logger.error("Fetching the checksum for %s timed out", version["image_name"])
+        logger.error(f"Fetching the checksum for {version['image_name']} timed out")
 
     except requests.exceptions.ConnectionError:
         error = True
-        logger.error("Unable to fetch new checksum for %s", version["image_name"])
+        logger.error(f"Unable to fetch new checksum for {version['image_name']}")
 
 
     if error:
-        logger.error("An error occured validating %s", version["image_name"])
+        logger.error(f"An error occured validating {version['image_name']}")
         return None
 
     if new_checksum == old_checksum and validate_raw_checksum(conn, filename, version):
@@ -319,10 +374,10 @@ def validate_checksum(version: any, filename: str,
         current_img_id = current_images[0].id if current_images else None
 
         if len(current_images) > 1:
-            logger.warning("More than 1 image for %s already exists", version["image_name"])
+            logger.warning(f"More than 1 image for {version["image_name"]} already exists")
         else:
 
-            logger.info("IMGBUILDER_OUTPUT OK %s already up to date", version["image_name"])
+            logger.info(f"{version['image_name']} already up to date", True)
             # Delete unused if they exist
             delete_unused_images(conn, version["image_name"],current_img_id)
 
@@ -437,7 +492,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         logger.error(e)
         return False
 
-    logger.info("Server with id (%s) created", test_server.id)
+    logger.info(f"Server with id ({test_server.id}) created")
 
 
     found_test_server = conn.get_server_by_id(test_server.id)
@@ -445,7 +500,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
 
     if found_test_server["status"] == "ERROR":
         conn.delete_server(test_server.id)
-        logger.error("Server %s failed to start with image %s!", test_server.id, image.id)
+        logger.error(f"Server {test_server.id} failed to start with image {image.id}!")
         return False
 
     # Test pinging
@@ -456,7 +511,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
 
 
     if not ping_result:
-        logger.error("Server %s failed to respond to ping!", test_server.id)
+        logger.error(f"Server {test_server.id} failed to respond to ping!")
         return False
 
     logger.info("All tests ok!")
@@ -515,8 +570,9 @@ def create_image(conn: openstack.connection.Connection, version: any,
                 f.write(new_checksum)
 
 
-        logger.info("IMGBUILDER_OUTPUT OK Openstack already has the current version of %s",
-                    version["image_name"])
+        logger.info(
+            f"Openstack already has the current version of {version['image_name']}", True
+                    )
 
         current_img_id = next(
             conn.image.images(
@@ -550,7 +606,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
         logger.error("An error occured while creating the image")
         return None
 
-    logger.info("Image with id (%s) created", new_image.id)
+    logger.info(f"Image with id ({new_image.id}) created")
 
 
     # Test image
@@ -587,11 +643,11 @@ def delete_unused_images(conn: openstack.connection.Connection,
         if (next(conn.compute.servers(image=img.id, all_projects=True), None) is None and
             next(conn.block_storage.volumes(image_id=img.id, all_projects=True),None) is None):
             # Not used by any server nor volume
-            logger.info("Deleting image %s", img.id)
+            logger.info(f"Deleting image {img.id}")
             conn.delete_image(img.id)
         elif img.visibility != "community":
             # used by someone. set to community
-            logger.info("Setting image %s to community", img.id)
+            logger.info(f"Setting image {img.id} to community")
             conn.image.update_image(img.id, visibility="community")
             still_using = True
 
@@ -632,11 +688,8 @@ def main() -> None:
 
     conn = openstack.connect(cloud=cloud)
 
-    logger.configure_logging(os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}.log"))
 
-
-    logger.info("===== %s =====", cloud)
-    logger.info("")
+    logger.set_cloud(cloud)
 
     # Load file from argv
     input_data = None
@@ -649,28 +702,26 @@ def main() -> None:
     for version in input_data["current"]:
         filename = version["image_url"].split("/")[-1]
 
-        logger.info("=== %s ===",version["image_name"])
+        logger.set_image(version["image_name"])
 
         new_checksum = validate_checksum(version, filename, conn, cloud)
 
         if new_checksum is None:
-            logger.info("")
             continue
 
 
 
-        logger.info("Downloading %s", version["image_name"])
+        logger.info(f"Downloading {version['image_name']}")
 
         new_image = create_image(conn, version, filename, new_checksum, network)
 
         if new_image is None:
-            logger.info("")
             continue
 
 
 
         # Everything is ok! Set visibility to what it should be
-        logger.info("Setting image to %s",version['visibility'])
+        logger.info(f"Setting image to {version['visibility']}")
         conn.image.update_image(new_image.id, visibility=version["visibility"])
 
 
@@ -683,14 +734,13 @@ def main() -> None:
                     "w",encoding="utf-8") as f:
                 f.write(new_checksum)
 
-        logger.info("IMGBUILDER_OUTPUT OK %s has been successfully updated", version["image_name"])
+        logger.info(f"{version["image_name"]} has been successfully updated", True)
 
-        logger.info("")
-
+    logger.start_deprecated()
 
     for version in input_data["deprecated"]:
 
-        logger.info("=== %s ===",version['image_name'])
+        logger.set_image(version["image_name"])
 
         still_using = delete_unused_images(conn, version["image_name"])
 
@@ -701,18 +751,23 @@ def main() -> None:
             pass
 
         if not still_using:
-            logger.info("%s removed completely", version["image_name"])
+            logger.info(f"{version['image_name']} removed completely",
+                        True
+                    )
         else:
-            logger.info("%s is still used by someone so it is not fully removed",
-                         version["image_name"])
+            logger.info(
+                f"{version['image_name']} is still used by someone so it is not fully removed",
+                True
+                )
 
         if version.get("filename"):
             cleanup_files(version["filename"])
 
-        logger.info("")
+
+    logger.write_log(os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}_log.json"))
 
 
-    logger.info("===============")
+
 
 
 if __name__=="__main__":
