@@ -79,7 +79,7 @@ def main() -> None:
         datetime.now() - datetime.strptime(run_data["start_timestamp"], "%Y-%m-%d %H:%M:%S.%f")
         ).seconds > WAITED_FOR_TOO_LONG:
 
-        print("Imagebuilder has not been run in a while!")
+        print(f"Imagebuilder was run last time more than {WAITED_FOR_TOO_LONG/3600} hours ago!")
         sys.exit(NAGIOS_STATE_CRITICAL)
 
 
@@ -96,8 +96,7 @@ def main() -> None:
             nagios_output += f"=== {img} ===\n"
             seen_images.append(img)
 
-            for timestamp in run_data[arr][img]:
-                msg = run_data[arr][img][timestamp]
+            for msg in run_data[arr][img]["events"]:
 
                 if msg["level"] == "WARNING":
                     if nagios_state != NAGIOS_STATE_CRITICAL:
@@ -115,14 +114,14 @@ def main() -> None:
 
         if set(images) - set(seen_images): # Not seen
             nagios_output += (
-                f"Images not seen in the output that should've been there ({arr}): "
+                f"Images not seen in the log that should've been there ({arr}): "
                 f"{set(images) - set(seen_images)}\n"
             )
             nagios_state = NAGIOS_STATE_CRITICAL
 
         if set(seen_images) - set(images): # Extra images
             nagios_output += (
-                f"Images seen that were not supposed to be there ({arr}): "
+                f"Images seen in the log that were not supposed to be there ({arr}): "
                 f"{set(seen_images) - set(images)}\n"
             )
             nagios_state = NAGIOS_STATE_CRITICAL
@@ -130,7 +129,7 @@ def main() -> None:
 
 
 
-    print(nagios_output)
+    print(nagios_output.strip())
     sys.exit(nagios_state)
 
 

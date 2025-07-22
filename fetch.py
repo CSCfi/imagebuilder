@@ -25,14 +25,14 @@ class ImgBuildLogger:
     2 = Error
     """
 
-    # Rotates logs with this
-    MAX_LOG_SIZE = 5000
 
     def __init__(self) -> None:
         """
-        Init to ok
+        Init the logger
         """
         self._code = 0
+        self._log_file = None
+        self._log_history = []
         self._log = {
             "start_timestamp": str(datetime.now()),
             "PID": os.getpid(),
@@ -56,8 +56,28 @@ class ImgBuildLogger:
         Sets the current image that's being written
         """
         self._cur_img = image
-        self._cur_write[self._cur_img] = self._cur_write.get(self._cur_img, {})
-        print(f"=== {image} ===")
+        self._cur_write[self._cur_img] = self._cur_write.get(self._cur_img, {
+            "events": []
+        })
+        print(f"{str(datetime.now())} [PID:{os.getpid()}] INFO: === {image} ===")
+
+
+    def set_log_file(self, log_file: str) -> None:
+        """
+        Loads the specified log file into memory and writes every event into it
+        """
+        self._log_file = log_file
+
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                self._log_history = json.load(f)
+
+        except FileNotFoundError:
+            self._log_history = []
+
+        except json.decoder.JSONDecodeError:
+            self._log_history = []
+
 
     def set_cloud(self, cloud: str) -> None:
         """
@@ -71,6 +91,7 @@ class ImgBuildLogger:
         Helper function that writes the messages into the log
         """
         message = {
+            "timestamp": str(datetime.now()),
             "level" : level,
             "content" : msg
         }
@@ -78,8 +99,13 @@ class ImgBuildLogger:
         if important:
             message["important"] = True
 
-        self._cur_write[self._cur_img][str(datetime.now())] = message
-        print(f"{level}: {msg}")
+        self._cur_write[self._cur_img]["events"].append(message)
+        print(f"{message['timestamp']} [PID:{os.getpid()}] {level}: {msg}")
+
+        with open(self._log_file, "w", encoding="utf-8") as f:
+            current_log = self._log_history.copy()
+            current_log.append(self._log)
+            json.dump(current_log, f)
 
 
     def warning(self, msg: str) -> None:
@@ -99,35 +125,9 @@ class ImgBuildLogger:
 
     def info(self, msg: str, important: bool = False) -> None:
         """
-        Same as logger.info
+        Log a message
         """
         self._write_log(msg, "INFO", important)
-
-
-    def write_log(self, log_file: str) -> None:
-        """
-        Writes the current log buffer into a file and rotates logs
-        """
-        try:
-            with open(log_file, "r", encoding="utf-8") as f:
-                current_log_data= json.load(f)
-
-        except FileNotFoundError:
-            current_log_data = []
-
-        except json.decoder.JSONDecodeError:
-            current_log_data = []
-
-
-        current_log_data.append(self._log)
-
-        current_log_data = current_log_data[-self.MAX_LOG_SIZE:]
-
-        with open(log_file, "w", encoding="utf-8") as f:
-            json.dump(current_log_data, f)
-
-
-
 
 
     @property
@@ -291,7 +291,7 @@ def validate_raw_checksum(conn: openstack.connection.Connection,
 
 
     if len(images) > 1:
-        logger.warning(f"More than 1 image for {version["image_name"]} already exists")
+        logger.warning(f"More than 1 image for {version['image_name']} already exists")
 
 
     return checksum_matches
@@ -374,7 +374,7 @@ def validate_checksum(version: any, filename: str,
         current_img_id = current_images[0].id if current_images else None
 
         if len(current_images) > 1:
-            logger.warning(f"More than 1 image for {version["image_name"]} already exists")
+            logger.warning(f"More than 1 image for {version['image_name']} already exists")
         else:
 
             logger.info(f"{version['image_name']} already up to date", True)
@@ -688,7 +688,7 @@ def main() -> None:
 
     conn = openstack.connect(cloud=cloud)
 
-
+    logger.set_log_file(os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}_log.json"))
     logger.set_cloud(cloud)
 
     # Load file from argv
@@ -734,7 +734,7 @@ def main() -> None:
                     "w",encoding="utf-8") as f:
                 f.write(new_checksum)
 
-        logger.info(f"{version["image_name"]} has been successfully updated", True)
+        logger.info(f"{version['image_name']} has been successfully updated", True)
 
     logger.start_deprecated()
 
@@ -764,7 +764,6 @@ def main() -> None:
             cleanup_files(version["filename"])
 
 
-    logger.write_log(os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}_log.json"))
 
 
 
