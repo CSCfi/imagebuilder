@@ -87,7 +87,7 @@ def main() -> None:
 
     if (
         datetime.now() - datetime.strptime(run_data["start_timestamp"], "%Y-%m-%d %H:%M:%S.%f")
-        ).seconds > WAITED_FOR_TOO_LONG:
+        ).total_seconds() > WAITED_FOR_TOO_LONG:
 
         print(f"Imagebuilder was run last time more than {WAITED_FOR_TOO_LONG/3600} hours ago!")
         sys.exit(NAGIOS_STATE_CRITICAL)
