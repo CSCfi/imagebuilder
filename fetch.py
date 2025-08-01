@@ -408,10 +408,14 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
 
     public_id = conn.network.find_network("public", is_router_external=True).id
 
-
-    floating_ip = conn.network.create_ip(
-        floating_network_id=public_id
-    )
+    try:
+        floating_ip = conn.network.create_ip(
+            floating_network_id=public_id
+        )
+    except openstack.exceptions.ConflictException as e:
+        logger.error("Creation of floating ip failed")
+        logger.error(str(e))
+        return False
 
     port = next(conn.network.ports(device_id=server_id), None)
 
@@ -489,7 +493,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         )
     except openstack.exceptions.SDKException as e:
         logger.error("Server failed to be created!")
-        logger.error(e)
+        logger.error(str(e))
         return False
 
     logger.info(f"Server with id ({test_server.id}) created")
