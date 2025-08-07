@@ -594,6 +594,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
     properties = version.get("properties", {})
     properties["description"] = "To find out which user to login with: ssh in as root."
     properties.setdefault("os_type", "linux") # configures ephemeral drive formatting
+    properties.setdefault("hw_vif_multiqueue_enabled", True) # set multiqueue to on by default
 
     new_image = conn.create_image(
         name=version["image_name"],
