@@ -83,7 +83,9 @@ input.json should look something like this.
             "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
             "checksum_url": "https://cloud-images.ubuntu.com/noble/current/SHA256SUMS",
             "properties": {
-                "os_distro": "ubuntu"
+                "os_distro": "ubuntu24.04",
+                "os_version": "24.04",
+                "os_admin_user": "ubuntu"
             }
         }
     ],
@@ -101,6 +103,10 @@ Note that checksum_url is optional but highly recommended if available.
 Deprecated.filename is optional to use. Use it if you believe that there might still be files on disk.
 
 The data in current also accepts custom properties for images. [Here's a list of all possible property values you can set](https://docs.openstack.org/glance/victoria/admin/useful-image-properties.html)
+
+Currently virtio-net multiqueue is enabled by default to improve network performance. However if you wish not to use it, then set the image property hw_vif_multiqueue_enabled as false
+
+Set os_admin_user to the username of the account that needs to be logged in via ssh.
 
 If you are creating a non-Linux image, in data.current.properties set "os_type" to your operating system.
 As of writing Openstack allows these values to be "linux" or "windows".
