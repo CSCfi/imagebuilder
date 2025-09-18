@@ -113,14 +113,12 @@ cloud = os.getenv("IMAGEBUILDER_CLOUD") # get it once to avoid potential race co
 network = os.getenv("IMAGEBUILDER_NETWORK")
 
 logger = ImgBuildLogger(
-    config={
-        'log_file': os.getenv(
-            "IMAGEBUILDER_LOG_FILE",
-            f"./{cloud}_log.json"
-        ),
-        'output_format': os.getenv('IMAGEBUILDER_OUTPUT_FORMAT', 'json'),
-        'debug_level': os.getenv('IMAGEBUILDER_DEBUG_LEVEL','DEBUG'),
-    }
+    log_file=os.getenv(
+        "IMAGEBUILDER_LOG_FILE",
+        f"./{cloud}_log.json"
+    ),
+    output_format=os.getenv('IMAGEBUILDER_OUTPUT_FORMAT', 'json'),
+    debug_level=os.getenv('IMAGEBUILDER_DEBUG_LEVEL','DEBUG'),
 )
 
 
