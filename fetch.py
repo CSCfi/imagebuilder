@@ -446,17 +446,26 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
 
     if secgroup is None:
         secgroup = conn.network.create_security_group(name="IMAGEBUILDER_PING_TEST")
-        conn.network.create_security_group_rule(
+        logger.debug(
+            f"Security group 'IMAGEBUILDER_PING_TEST' created. {secgroup}"
+        )
+        rule = conn.network.create_security_group_rule(
             security_group_id=secgroup.id,
             direction='ingress',
             ether_type='IPv4',
             protocol='icmp'
         )
-        conn.network.create_security_group_rule(
+        logger.debug(
+            f"Created rule to allow ICMP ingress in security group. {rule}"
+        )
+        rule = conn.network.create_security_group_rule(
             security_group_id=secgroup.id,
             direction='egress',
             ether_type='IPv4',
             protocol='icmp'
+        )
+        logger.debug(
+            f"Created rule to allow ICMP egress in security group. {rule}"
         )
 
     try:
