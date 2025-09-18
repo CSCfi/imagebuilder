@@ -7,7 +7,6 @@ For more details refer to README.md
 
 
 """
-from datetime import datetime
 import sys
 import os
 import json
@@ -662,7 +661,7 @@ def main() -> None:
 
 
     openstack.enable_logging(debug=(
-        os.getenv("IMAGEBUILDER_DEBUG") is not None
+        os.getenv("IMAGEBUILDER_DEBUG_LEVEL") is not None
         ))
 
     conn = openstack.connect(cloud=cloud)
@@ -729,12 +728,6 @@ def main() -> None:
 
         if version.get("filename"):
             cleanup_files(version["filename"])
-
-
-
-
-
-
 
 if __name__=="__main__":
     main()
