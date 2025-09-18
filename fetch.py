@@ -137,7 +137,7 @@ class ImgBuildLogger:
         Returns
         -------
         int
-            Current exit code        
+            Current exit code
         """
         return self._code
 
@@ -302,7 +302,7 @@ def validate_checksum(version: any, filename: str,
                       conn: openstack.connection.Connection, cloud: str) -> str | None:
     """
     Validates checksums to check if an image requires updating
-    
+
     Returns
     -------
     str
@@ -406,12 +406,8 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
 
     logger.info("Testing pinging")
 
-    public_id = conn.network.find_network("public", is_router_external=True).id
-
     try:
-        floating_ip = conn.network.create_ip(
-            floating_network_id=public_id
-        )
+        floating_ip = conn.network.find_available_ip()
     except openstack.exceptions.ConflictException as e:
         logger.error("Creation of floating ip failed")
         logger.error(str(e))
@@ -457,7 +453,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
     -------
     bool
         True if the server can be created and pinged
-        False if errors are detected    
+        False if errors are detected
     """
 
     logger.info("Testing newly created image")
@@ -550,7 +546,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
     -------
     any:
         If everything is successful the newly created image is returned.
-        If the image is already up to date or if there's an error None is returned    
+        If the image is already up to date or if there's an error None is returned
     """
 
     # Download image
