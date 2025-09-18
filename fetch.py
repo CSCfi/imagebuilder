@@ -36,7 +36,7 @@ class ImgBuildLogger:
 
         # create formatter
         stream_formatter = logging.Formatter(
-            '%(name)-12s %(levelname)-8s %(message)s'
+            '%(name)s %(levelname)s %(message)s'
         )
 
         sysloghandler = SysLogHandler()
@@ -67,7 +67,7 @@ class ImgBuildLogger:
         )
         if self.config['output_format'] == 'PLAIN':
             plain_file_formatter = logging.Formatter(
-                '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
+                '%(asctime)s %(name)s %(levelname)s %(message)s'
             )
             filehandler.setFormatter(plain_file_formatter)
         filehandler.setLevel(logging.DEBUG)
