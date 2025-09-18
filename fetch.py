@@ -421,13 +421,14 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
 
     logger.info(f"Testing pinging {floating_ip.floating_ip_address}")
 
-    ping_result = os.system(f"timeout 360 bash -c \
-                            'while ! \
-                                 ping -c 1 -W 1 {floating_ip.floating_ip_address} \
-                                 > /dev/null 2>&1; \
-                                 do sleep 1; \
-                             done'"
-                            )
+    ping_result = os.system(
+        f"timeout 360 bash -c \
+        'while ! \
+                ping -c 1 -W 1 {floating_ip.floating_ip_address} \
+                > /dev/null 2>&1; \
+                do sleep 1; \
+            done'"
+    )
 
 
     conn.network.delete_ip(floating_ip)
