@@ -32,7 +32,7 @@ class ImgBuildLogger:
         ''' Initialize log object '''
         self.config = kwargs
         self._code = 0
-        self._log = logging.getLogger("__project_codename__")
+        self._log = logging.getLogger("imagebuilder")
         self._log.setLevel(logging.DEBUG)
 
         sysloghandler = SysLogHandler()
@@ -52,7 +52,7 @@ class ImgBuildLogger:
                 'HOME', os.environ.get('USERPROFILE', '')
             )
             log_folder = os.path.join(home_folder, "log")
-            log_file = os.path.join(log_folder, "__project_codename__.log")
+            log_file = os.path.join(log_folder, "imagebuilder.log")
 
         if not os.path.exists(os.path.dirname(log_file)):
             os.mkdir(os.path.dirname(log_file))
