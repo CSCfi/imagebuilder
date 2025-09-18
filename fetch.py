@@ -661,7 +661,7 @@ def main() -> None:
 
 
     openstack.enable_logging(debug=(
-        os.getenv("IMAGEBUILDER_DEBUG_LEVEL") is not None
+        os.getenv("IMAGEBUILDER_OPENSTACK_DEBUG_LEVEL") is not None
         ))
 
     conn = openstack.connect(cloud=cloud)
