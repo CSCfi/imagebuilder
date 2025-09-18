@@ -35,17 +35,16 @@ class ImgBuildLogger:
         self._log = logging.getLogger("imagebuilder")
         self._log.setLevel(logging.DEBUG)
 
-        # create formatter
-        stream_formatter = logging.Formatter(
-            '%(name)s %(levelname)s %(message)s'
-        )
-
         sysloghandler = SysLogHandler()
         sysloghandler.setLevel(logging.DEBUG)
         self._log.addHandler(sysloghandler)
 
         streamhandler = logging.StreamHandler(sys.stdout)
-        streamhandler.setFormatter(stream_formatter)
+        if self.config['output_format'] == 'PLAIN':
+            stream_formatter = logging.Formatter(
+                '%(name)s %(levelname)s %(message)s'
+            )
+            streamhandler.setFormatter(stream_formatter)
         streamhandler.setLevel(
             logging.getLevelName(self.config.get("debug_level", 'INFO'))
         )
