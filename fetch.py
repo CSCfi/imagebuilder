@@ -414,8 +414,7 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
         return False
 
     logger.info(
-        "Attaching floating IP: %s",
-        floating_ip
+        f"Attaching floating IP: {floating_ip}",
     )
 
     port = next(conn.network.ports(device_id=server_id), None)
