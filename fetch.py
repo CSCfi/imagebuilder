@@ -10,6 +10,7 @@ For more details refer to README.md
 import sys
 import os
 import json
+import time
 import hashlib
 import logging
 from logging.handlers import SysLogHandler
@@ -73,41 +74,42 @@ class ImgBuildLogger:
         filehandler.setLevel(logging.DEBUG)
         self._log.addHandler(filehandler)
 
-    def _output(self, message):
+    def _output(self, message, severity):
+        if self.config['output_format'] == 'PLAIN':
+            return f"{time.time()} {message}"
+        if isinstance(message, str):
+            message = { "message": message }
+        if 'timestamp' not in message:
+            message["timestamp"] = time.time()
+        message['severity'] = severity
+
         if self.config['output_format'] == 'JSON':
-            if isinstance(message, str):
-                message = { "message": message }
             return json.dumps(message)
-        elif self.config['output_format'] == 'YAML':
-            if isinstance(message, str):
-                message = { "message": message }
+        if self.config['output_format'] == 'YAML':
             return yaml.dump(message, Dumper=yaml.Dumper)
-        elif self.config['output_format'] == 'PLAIN':
-            return f"{message}"
-        else:
-            self._log.warning(
-                "Output format '%s' not supported",
-                self.config['output_format']
-            )
-            return message
+
+        self._log.warning(
+            { "message": f"Output format '{self.config['output_format']}' not supported"}
+        )
+        return message
 
     def info(self, message):
         '''Output information message'''
-        return self._log.info(self._output(message))
+        return self._log.info(self._output(message, 'info'))
 
     def warning(self, message):
         '''Output warning message'''
         self._code = max(self._code, 1)
-        return self._log.warning(self._output(message))
+        return self._log.warning(self._output(message, 'warning'))
 
     def error(self, message):
         '''Output error message'''
         self._code = 2
-        return self._log.error(self._output(message))
+        return self._log.error(self._output(message, 'error'))
 
     def debug(self, message):
         '''Output debugging message'''
-        return self._log.debug(self._output(message))
+        return self._log.debug(self._output(message, 'debug'))
 
 
     @property
