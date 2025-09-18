@@ -81,6 +81,7 @@ class ImgBuildLogger:
         if 'timestamp' not in message:
             message["timestamp"] = time.time()
         message['severity'] = severity
+        message['log_name'] = self._log.name
 
         if self.config['output_format'] == 'JSON':
             return json.dumps(message)
