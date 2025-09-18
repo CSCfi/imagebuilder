@@ -534,14 +534,16 @@ def cleanup_files(filename: str) -> None:
     """
 
     try:
-        os.remove("tmp/"+filename)
+        if os.path.exists(f"tmp/{filename}"):
+            os.remove(f"tmp/{filename}")
     except OSError as error:
         logger.warning(
             f"Error removing file 'tmp/{filename}' from disk. {error}"
         )
 
     try:
-        os.remove("tmp/"+filename+".raw")
+        if os.path.exists(f"tmp/{filename}.raw"):
+            os.remove(f"tmp/{filename}.raw")
     except OSError as error:
         logger.warning(
             f"Error removing file 'tmp/{filename}' from disk. {error}"
@@ -733,7 +735,8 @@ def main() -> None:
             f"Image '{filename}' has been deprecated, deleting from local disk"
         )
         try:
-            os.remove(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM")
+            if os.path.exists(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM"):
+                os.remove(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM")
         except OSError as error:
             logger.warning(
                 f"Error removing image '{filename}' from local disk. {error}"
