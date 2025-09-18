@@ -12,6 +12,9 @@ import sys
 import os
 import json
 import hashlib
+import logging
+from logging.handlers import SysLogHandler
+import yaml
 import requests
 import openstack
 
@@ -25,109 +28,74 @@ class ImgBuildLogger:
     2 = Error
     """
 
-
-    def __init__(self) -> None:
-        """
-        Init the logger
-        """
+    def _init_log(self, **kwargs):
+        ''' Initialize log object '''
+        self.config = kwargs
         self._code = 0
-        self._log_file = None
-        self._log_history = []
-        self._log = {
-            "start_timestamp": str(datetime.now()),
-            "PID": os.getpid(),
-            "cloud": None,
-            "current": {},
-            "deprecated": {}
-        }
-        self._cur_write = self._log["current"]
-        self._cur_img = None
+        self._log = logging.getLogger("__project_codename__")
+        self._log.setLevel(logging.DEBUG)
 
+        sysloghandler = SysLogHandler()
+        sysloghandler.setLevel(logging.DEBUG)
+        self._log.addHandler(sysloghandler)
 
-    def start_deprecated(self) -> None:
-        """
-        Starts to fill log.deprecated instead of log.current
-        """
-        self._cur_write = self._log["deprecated"]
+        streamhandler = logging.StreamHandler(sys.stdout)
+        streamhandler.setLevel(
+            logging.getLevelName(self.config.get("debug_level", 'INFO'))
+        )
+        self._log.addHandler(streamhandler)
 
+        if 'log_file' in self.config:
+            log_file = self.config['log_file']
+        else:
+            home_folder = os.environ.get(
+                'HOME', os.environ.get('USERPROFILE', '')
+            )
+            log_folder = os.path.join(home_folder, "log")
+            log_file = os.path.join(log_folder, "__project_codename__.log")
 
-    def set_image(self, image: str) -> None:
-        """
-        Sets the current image that's being written
-        """
-        self._cur_img = image
-        self._cur_write[self._cur_img] = self._cur_write.get(self._cur_img, {
-            "events": []
-        })
-        print(f"{str(datetime.now())} [PID:{os.getpid()}] INFO: === {image} ===")
+        if not os.path.exists(os.path.dirname(log_file)):
+            os.mkdir(os.path.dirname(log_file))
 
+        filehandler = logging.handlers.RotatingFileHandler(
+            log_file, maxBytes=102400000
+        )
+        # create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
+        )
+        filehandler.setFormatter(formatter)
+        filehandler.setLevel(logging.DEBUG)
+        self._log.addHandler(filehandler)
+        return True
 
-    def set_log_file(self, log_file: str) -> None:
-        """
-        Loads the specified log file into memory and writes every event into it
-        """
-        self._log_file = log_file
+    def _output(self, message):
+        if self.config['output_format'] == 'JSON':
+            return json.dumps(message, indent=2)
+        elif self.config['output_format'] == 'YAML':
+            return yaml.dump(message, Dumper=yaml.Dumper)
+        elif self.config['output_format'] == 'PLAIN':
+            return f"{message}"
+        else:
+            self._log.warning(
+                "Output format '%s' not supported",
+                self.config['output_format']
+            )
+            return message
 
-        try:
-            with open(log_file, "r", encoding="utf-8") as f:
-                self._log_history = json.load(f)
+    def info(self, message):
+        return self._log.info(self._output(message))
 
-        except FileNotFoundError:
-            self._log_history = []
-
-        except json.decoder.JSONDecodeError:
-            self._log_history = []
-
-
-    def set_cloud(self, cloud: str) -> None:
-        """
-        Sets the cloud variable for the log
-        """
-        self._log["cloud"] = cloud
-
-
-    def _write_log(self, msg: str, level: str, important: bool = False) -> None:
-        """
-        Helper function that writes the messages into the log
-        """
-        message = {
-            "timestamp": str(datetime.now()),
-            "level" : level,
-            "content" : msg
-        }
-
-        if important:
-            message["important"] = True
-
-        self._cur_write[self._cur_img]["events"].append(message)
-        print(f"{message['timestamp']} [PID:{os.getpid()}] {level}: {msg}")
-
-        with open(self._log_file, "w", encoding="utf-8") as f:
-            current_log = self._log_history.copy()
-            current_log.append(self._log)
-            json.dump(current_log, f)
-
-
-    def warning(self, msg: str) -> None:
-        """
-        Set code to warning and log the message
-        """
+    def warning(self, message):
         self._code = max(self._code, 1)
-        self._write_log(msg, "WARNING")
+        return self._log.warning(self._output(message))
 
-    def error(self, msg: str) -> None:
-        """
-        Set code to error and log the message
-        """
+    def error(self, message):
         self._code = 2
-        self._write_log(msg, "ERROR")
+        return self._log.error(self._output(message))
 
-
-    def info(self, msg: str, important: bool = False) -> None:
-        """
-        Log a message
-        """
-        self._write_log(msg, "INFO", important)
+    def debug(self, message):
+        return self._log.debug(self._output(message))
 
 
     @property
@@ -142,7 +110,17 @@ class ImgBuildLogger:
         return self._code
 
 
-logger = ImgBuildLogger()
+cloud = os.getenv("IMAGEBUILDER_CLOUD") # get it once to avoid potential race conditions
+network = os.getenv("IMAGEBUILDER_NETWORK")
+
+logger = ImgBuildLogger(
+    config={
+        'log_file': os.getenv(
+            "IMAGEBUILDER_LOG_FILE",
+            f"./{cloud}_log.json"
+        )
+    }
+)
 
 
 def get_file_hash(filename: str, cur_hash: hashlib._hashlib.HASH) -> str:
@@ -377,7 +355,7 @@ def validate_checksum(version: any, filename: str,
             logger.warning(f"More than 1 image for {version['image_name']} already exists")
         else:
 
-            logger.info(f"{version['image_name']} already up to date", True)
+            logger.info(f"{version['image_name']} already up to date")
             # Delete unused if they exist
             delete_unused_images(conn, version["image_name"],current_img_id)
 
@@ -575,8 +553,8 @@ def create_image(conn: openstack.connection.Connection, version: any,
 
 
         logger.info(
-            f"Openstack already has the current version of {version['image_name']}", True
-                    )
+            f"Openstack already has the current version of {version['image_name']}"
+        )
 
         current_img_id = next(
             conn.image.images(
@@ -674,9 +652,6 @@ def main() -> None:
     Reads defined images from input.json, downloads new images and deprecates old ones
     """
 
-    cloud = os.getenv("IMAGEBUILDER_CLOUD") # get it once to avoid potential race conditions
-    network = os.getenv("IMAGEBUILDER_NETWORK")
-
     if cloud is None or network is None:
 
         missing = [
@@ -693,9 +668,6 @@ def main() -> None:
 
     conn = openstack.connect(cloud=cloud)
 
-    logger.set_log_file(os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}_log.json"))
-    logger.set_cloud(cloud)
-
     # Load file from argv
     input_data = None
     input_file = os.getenv("IMAGEBUILDER_INPUT_FILE", "input.json")
@@ -706,8 +678,6 @@ def main() -> None:
 
     for version in input_data["current"]:
         filename = version["image_url"].split("/")[-1]
-
-        logger.set_image(version["image_name"])
 
         new_checksum = validate_checksum(version, filename, conn, cloud)
 
@@ -739,13 +709,9 @@ def main() -> None:
                     "w",encoding="utf-8") as f:
                 f.write(new_checksum)
 
-        logger.info(f"{version['image_name']} has been successfully updated", True)
-
-    logger.start_deprecated()
+        logger.info(f"{version['image_name']} has been successfully updated")
 
     for version in input_data["deprecated"]:
-
-        logger.set_image(version["image_name"])
 
         still_using = delete_unused_images(conn, version["image_name"])
 
@@ -756,14 +722,11 @@ def main() -> None:
             pass
 
         if not still_using:
-            logger.info(f"{version['image_name']} removed completely",
-                        True
-                    )
+            logger.info(f"{version['image_name']} removed completely")
         else:
             logger.info(
-                f"{version['image_name']} is still used by someone so it is not fully removed",
-                True
-                )
+                f"{version['image_name']} is still used by someone so it is not fully removed"
+            )
 
         if version.get("filename"):
             cleanup_files(version["filename"])
