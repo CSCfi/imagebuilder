@@ -88,17 +88,21 @@ class ImgBuildLogger:
             return message
 
     def info(self, message):
+        '''Output information message'''
         return self._log.info(self._output(message))
 
     def warning(self, message):
+        '''Output warning message'''
         self._code = max(self._code, 1)
         return self._log.warning(self._output(message))
 
     def error(self, message):
+        '''Output error message'''
         self._code = 2
         return self._log.error(self._output(message))
 
     def debug(self, message):
+        '''Output debugging message'''
         return self._log.debug(self._output(message))
 
 
@@ -472,7 +476,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         )
     else:
         logger.info(
-            f"Security group 'IMAGEBUILDER_PING_TEST' already exists."
+            "Security group 'IMAGEBUILDER_PING_TEST' already exists."
         )
 
     try:
@@ -529,7 +533,6 @@ def cleanup_files(filename: str) -> None:
         logger.warning(
             f"Error removing file 'tmp/{filename}' from disk. {error}"
         )
-        pass
 
     try:
         os.remove("tmp/"+filename+".raw")
@@ -537,7 +540,6 @@ def cleanup_files(filename: str) -> None:
         logger.warning(
             f"Error removing file 'tmp/{filename}' from disk. {error}"
         )
-        pass
 
 def create_image(conn: openstack.connection.Connection, version: any,
                  filename: str, new_checksum: str, network: str) -> any:
@@ -695,7 +697,7 @@ def main() -> None:
 
         if new_image is None:
             logger.debug(
-                f"Image is already up to date or there was an error"
+                "Image is already up to date or there was an error"
             )
             continue
 
@@ -721,16 +723,15 @@ def main() -> None:
         still_using = delete_unused_images(conn, version["image_name"])
 
         # It is deprecated so get rid of the files on disk
-        self.debug(
-            f"Image '{image_name}' has been deprecated, deleting from local disk"
+        logger.debug(
+            f"Image '{filename}' has been deprecated, deleting from local disk"
         )
         try:
             os.remove(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM")
         except OSError as error:
-            self.warning(
-                f"Error removing image '{image_name}' from local disk. {error}"
+            logger.warning(
+                f"Error removing image '{filename}' from local disk. {error}"
             )
-            pass
 
         if not still_using:
             logger.info(f"{version['image_name']} removed completely")
