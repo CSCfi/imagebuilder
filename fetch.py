@@ -28,7 +28,7 @@ class ImgBuildLogger:
     2 = Error
     """
 
-    def _init_log(self, **kwargs):
+    def __init__(self, **kwargs):
         ''' Initialize log object '''
         self.config = kwargs
         self._code = 0
