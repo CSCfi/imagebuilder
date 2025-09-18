@@ -67,7 +67,6 @@ class ImgBuildLogger:
         filehandler.setFormatter(formatter)
         filehandler.setLevel(logging.DEBUG)
         self._log.addHandler(filehandler)
-        return True
 
     def _output(self, message):
         if self.config['output_format'] == 'JSON':
