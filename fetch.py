@@ -406,16 +406,16 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
 
     logger.info("Testing pinging")
 
+    public_id = conn.network.find_network("public", is_router_external=True).id
+
     try:
-        floating_ip = conn.network.find_available_ip()
+        floating_ip = conn.network.create_ip(
+            floating_network_id=public_id
+        )
     except openstack.exceptions.ConflictException as e:
         logger.error("Creation of floating ip failed")
         logger.error(str(e))
         return False
-
-    logger.info(
-        f"Attaching floating IP: {floating_ip}",
-    )
 
     port = next(conn.network.ports(device_id=server_id), None)
 
