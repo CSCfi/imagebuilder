@@ -77,7 +77,7 @@ class ImgBuildLogger:
         if self.config['output_format'] == 'JSON':
             if isinstance(message, str):
                 message = { "message": message }
-            return json.dumps(message, indent=2)
+            return json.dumps(message)
         elif self.config['output_format'] == 'YAML':
             if isinstance(message, str):
                 message = { "message": message }
