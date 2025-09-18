@@ -118,7 +118,7 @@ logger = ImgBuildLogger(
         "IMAGEBUILDER_LOG_FILE",
         f"./{cloud}_log.json"
     ),
-    output_format=os.getenv('IMAGEBUILDER_OUTPUT_FORMAT', 'JSON'),
+    output_format=os.getenv('IMAGEBUILDER_OUTPUT_FORMAT', 'PLAIN'),
     debug_level=os.getenv('IMAGEBUILDER_DEBUG_LEVEL','INFO'),
 )
 
