@@ -65,7 +65,8 @@ class ImgBuildLogger:
         filehandler = logging.handlers.RotatingFileHandler(
             log_file, maxBytes=102400000
         )
-        filehandler.setFormatter(formatter)
+        if self.config['output_format'] == 'PLAIN':
+            filehandler.setFormatter(formatter)
         filehandler.setLevel(logging.DEBUG)
         self._log.addHandler(filehandler)
 
@@ -118,7 +119,7 @@ logger = ImgBuildLogger(
         "IMAGEBUILDER_LOG_FILE",
         f"./{cloud}_log.json"
     ),
-    output_format=os.getenv('IMAGEBUILDER_OUTPUT_FORMAT', 'PLAIN'),
+    output_format=os.getenv('IMAGEBUILDER_OUTPUT_FORMAT', 'JSON'),
     debug_level=os.getenv('IMAGEBUILDER_DEBUG_LEVEL','INFO'),
 )
 
