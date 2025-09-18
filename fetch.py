@@ -594,13 +594,7 @@ def create_image(conn: openstack.connection.Connection, version: any,
     if not test_image(conn, new_image, network):
         return None
 
-
-
-
     return new_image
-
-
-
 
 def delete_unused_images(conn: openstack.connection.Connection,
                          name: str, skip: str = None) -> bool:
@@ -680,18 +674,20 @@ def main() -> None:
         new_checksum = validate_checksum(version, filename, conn, cloud)
 
         if new_checksum is None:
+            logger.debug(
+                f"Image '{filename}' didn't change in remote source."
+            )
             continue
-
-
 
         logger.info(f"Downloading {version['image_name']}")
 
         new_image = create_image(conn, version, filename, new_checksum, network)
 
         if new_image is None:
+            logger.debug(
+                f"Image is already up to date or there was an error"
+            )
             continue
-
-
 
         # Everything is ok! Set visibility to what it should be
         logger.info(f"Setting image to {version['visibility']}")
