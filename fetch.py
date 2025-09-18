@@ -75,8 +75,12 @@ class ImgBuildLogger:
 
     def _output(self, message):
         if self.config['output_format'] == 'JSON':
+            if isinstance(message, str):
+                message = { "message": message }
             return json.dumps(message, indent=2)
         elif self.config['output_format'] == 'YAML':
+            if isinstance(message, str):
+                message = { "message": message }
             return yaml.dump(message, Dumper=yaml.Dumper)
         elif self.config['output_format'] == 'PLAIN':
             return f"{message}"
