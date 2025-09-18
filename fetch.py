@@ -506,16 +506,19 @@ def cleanup_files(filename: str) -> None:
 
     try:
         os.remove("tmp/"+filename)
-    except OSError:
+    except OSError as error:
+        logger.warning(
+            f"Error removing file 'tmp/{filename}' from disk. {error}"
+        )
         pass
 
     try:
         os.remove("tmp/"+filename+".raw")
-    except OSError:
+    except OSError as error:
+        logger.warning(
+            f"Error removing file 'tmp/{filename}' from disk. {error}"
+        )
         pass
-
-
-
 
 def create_image(conn: openstack.connection.Connection, version: any,
                  filename: str, new_checksum: str, network: str) -> any:
@@ -630,20 +633,10 @@ def delete_unused_images(conn: openstack.connection.Connection,
 
     return still_using
 
-
-
-
-
-
-
-
-
-
 def main() -> None:
     """
     Reads defined images from input.json, downloads new images and deprecates old ones
     """
-
     if cloud is None or network is None:
 
         missing = [
@@ -652,7 +645,6 @@ def main() -> None:
             ]
 
         raise EnvironmentError(f"Environtment variables are not set! ({', '.join(missing)})")
-
 
     openstack.enable_logging(debug=(
         os.getenv("IMAGEBUILDER_OPENSTACK_DEBUG_LEVEL") is not None
@@ -666,7 +658,6 @@ def main() -> None:
 
     with open(input_file, "r", encoding="utf-8") as f:
         input_data = json.load(f)
-
 
     for version in input_data["current"]:
         filename = version["image_url"].split("/")[-1]
@@ -693,14 +684,15 @@ def main() -> None:
         logger.info(f"Setting image to {version['visibility']}")
         conn.image.update_image(new_image.id, visibility=version["visibility"])
 
-
-
         # Remove old ones
         delete_unused_images(conn, version["image_name"], new_image.id)
 
         if new_checksum != filename:
-            with open(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
-                    "w",encoding="utf-8") as f:
+            with open(
+                f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
+                "w",
+                encoding="utf-8"
+            ) as f:
                 f.write(new_checksum)
 
         logger.info(f"{version['image_name']} has been successfully updated")
@@ -710,9 +702,15 @@ def main() -> None:
         still_using = delete_unused_images(conn, version["image_name"])
 
         # It is deprecated so get rid of the files on disk
+        self.debug(
+            f"Image '{image_name}' has been deprecated, deleting from local disk"
+        )
         try:
             os.remove(f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM")
-        except OSError:
+        except OSError as error:
+            self.warning(
+                f"Error removing image '{image_name}' from local disk. {error}"
+            )
             pass
 
         if not still_using:
