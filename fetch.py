@@ -34,11 +34,17 @@ class ImgBuildLogger:
         self._log = logging.getLogger("imagebuilder")
         self._log.setLevel(logging.DEBUG)
 
+        # create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
+        )
+
         sysloghandler = SysLogHandler()
         sysloghandler.setLevel(logging.DEBUG)
         self._log.addHandler(sysloghandler)
 
         streamhandler = logging.StreamHandler(sys.stdout)
+        streamhandler.setFormatter(formatter)
         streamhandler.setLevel(
             logging.getLevelName(self.config.get("debug_level", 'INFO'))
         )
@@ -58,10 +64,6 @@ class ImgBuildLogger:
 
         filehandler = logging.handlers.RotatingFileHandler(
             log_file, maxBytes=102400000
-        )
-        # create formatter
-        formatter = logging.Formatter(
-            '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
         )
         filehandler.setFormatter(formatter)
         filehandler.setLevel(logging.DEBUG)
