@@ -396,8 +396,6 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
         logger.info("Skipping ping test...")
         return True
 
-    logger.info("Testing pinging")
-
     public_id = conn.network.find_network("public", is_router_external=True).id
 
     try:
@@ -421,6 +419,7 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
         port_id=port.id
     )
 
+    logger.info(f"Testing pinging {floating_ip.floating_ip_address}")
 
     ping_result = os.system(f"timeout 360 bash -c \
                             'while ! \
