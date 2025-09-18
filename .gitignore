@@ -5,3 +5,5 @@ secure.yml
 clouds.yaml
 clouds.yml
 checksums/*
+.venv
+*log.json
