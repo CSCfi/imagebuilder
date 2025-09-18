@@ -35,8 +35,8 @@ class ImgBuildLogger:
         self._log.setLevel(logging.DEBUG)
 
         # create formatter
-        formatter = logging.Formatter(
-            '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
+        stream_formatter = logging.Formatter(
+            '%(name)-12s %(levelname)-8s %(message)s'
         )
 
         sysloghandler = SysLogHandler()
@@ -44,7 +44,7 @@ class ImgBuildLogger:
         self._log.addHandler(sysloghandler)
 
         streamhandler = logging.StreamHandler(sys.stdout)
-        streamhandler.setFormatter(formatter)
+        streamhandler.setFormatter(stream_formatter)
         streamhandler.setLevel(
             logging.getLevelName(self.config.get("debug_level", 'INFO'))
         )
@@ -66,7 +66,10 @@ class ImgBuildLogger:
             log_file, maxBytes=102400000
         )
         if self.config['output_format'] == 'PLAIN':
-            filehandler.setFormatter(formatter)
+            plain_file_formatter = logging.Formatter(
+                '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
+            )
+            filehandler.setFormatter(plain_file_formatter)
         filehandler.setLevel(logging.DEBUG)
         self._log.addHandler(filehandler)
 
@@ -446,7 +449,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
 
     if secgroup is None:
         secgroup = conn.network.create_security_group(name="IMAGEBUILDER_PING_TEST")
-        logger.debug(
+        logger.info(
             f"Security group 'IMAGEBUILDER_PING_TEST' created. {secgroup}"
         )
         rule = conn.network.create_security_group_rule(
@@ -455,7 +458,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
             ether_type='IPv4',
             protocol='icmp'
         )
-        logger.debug(
+        logger.info(
             f"Created rule to allow ICMP ingress in security group. {rule}"
         )
         rule = conn.network.create_security_group_rule(
@@ -464,8 +467,12 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
             ether_type='IPv4',
             protocol='icmp'
         )
-        logger.debug(
+        logger.info(
             f"Created rule to allow ICMP egress in security group. {rule}"
+        )
+    else:
+        logger.info(
+            f"Security group 'IMAGEBUILDER_PING_TEST' already exists."
         )
 
     try:
