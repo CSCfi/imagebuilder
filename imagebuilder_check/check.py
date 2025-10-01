@@ -7,12 +7,11 @@ import os
 import sys
 import json
 
-NAGIOS_STATE_OK             = 0
-NAGIOS_STATE_WARNING        = 1
-NAGIOS_STATE_CRITICAL       = 2
+NAGIOS_STATE_OK = 0
+NAGIOS_STATE_WARNING = 1
+NAGIOS_STATE_CRITICAL = 2
 
-WAITED_FOR_TOO_LONG = 90000 # 25 hours
-
+WAITED_FOR_TOO_LONG = 90000  # 25 hours
 
 
 def get_run_data(filename: str, cloud: str) -> dict:
@@ -31,7 +30,9 @@ def get_run_data(filename: str, cloud: str) -> dict:
 
             if not content:
                 print("The given log file is empty and therefore cannot be analyzed")
-                print("This is most likely caused by the log being rotated and it will fix itself")
+                print(
+                    "This is most likely caused by the log being rotated and it will fix itself"
+                )
                 sys.exit(NAGIOS_STATE_WARNING)
 
             json_data = json.loads(content)
@@ -50,9 +51,6 @@ def get_run_data(filename: str, cloud: str) -> dict:
     sys.exit(NAGIOS_STATE_CRITICAL)
 
 
-
-
-
 def main() -> None:
     """
     Main entry point
@@ -65,13 +63,18 @@ def main() -> None:
     if cloud is None or filename is None:
 
         missing = [
-            x for x in
-                ["IMAGEBUILDER_CHECK_CLOUD", "IMAGEBUILDER_CHECK_FILE", "IMAGEBUILDER_INPUT_FILE"]
-            if os.getenv(x) is None
+            x
+            for x in [
+                "IMAGEBUILDER_CHECK_CLOUD",
+                "IMAGEBUILDER_CHECK_FILE",
+                "IMAGEBUILDER_INPUT_FILE",
             ]
+            if os.getenv(x) is None
+        ]
 
-        raise EnvironmentError(f"Environment variables are not set! ({', '.join(missing)})")
-
+        raise EnvironmentError(
+            f"Environment variables are not set! ({', '.join(missing)})"
+        )
 
     input_json_data = None
     with open(input_json, "r", encoding="utf-8") as f:
@@ -81,17 +84,17 @@ def main() -> None:
         print(f"Failed to read json file: {input_json}")
         sys.exit(NAGIOS_STATE_CRITICAL)
 
-
     run_data = get_run_data(filename, cloud)
 
-
     if (
-        datetime.now() - datetime.strptime(run_data["start_timestamp"], "%Y-%m-%d %H:%M:%S.%f")
-        ).total_seconds() > WAITED_FOR_TOO_LONG:
+        datetime.now()
+        - datetime.strptime(run_data["start_timestamp"], "%Y-%m-%d %H:%M:%S.%f")
+    ).total_seconds() > WAITED_FOR_TOO_LONG:
 
-        print(f"Imagebuilder was run last time more than {WAITED_FOR_TOO_LONG/3600} hours ago!")
+        print(
+            f"Imagebuilder was run last time more than {WAITED_FOR_TOO_LONG/3600} hours ago!"
+        )
         sys.exit(NAGIOS_STATE_CRITICAL)
-
 
     nagios_state = NAGIOS_STATE_OK
     nagios_output = ""
@@ -100,7 +103,6 @@ def main() -> None:
 
         images = [v["image_name"] for v in input_json_data[arr]]
         seen_images = []
-
 
         for img in run_data[arr]:
             nagios_output += f"=== {img} ===\n"
@@ -120,30 +122,23 @@ def main() -> None:
                 elif msg.get("important"):
                     nagios_output += msg["content"] + "\n"
 
-
-
-        if set(images) - set(seen_images): # Not seen
+        if set(images) - set(seen_images):  # Not seen
             nagios_output += (
                 f"Images not seen in the log that should've been there ({arr}): "
                 f"{set(images) - set(seen_images)}\n"
             )
             nagios_state = NAGIOS_STATE_CRITICAL
 
-        if set(seen_images) - set(images): # Extra images
+        if set(seen_images) - set(images):  # Extra images
             nagios_output += (
                 f"Images seen in the log that were not supposed to be there ({arr}): "
                 f"{set(seen_images) - set(images)}\n"
             )
             nagios_state = NAGIOS_STATE_CRITICAL
 
-
-
-
     print(nagios_output.strip())
     sys.exit(nagios_state)
 
 
-
-
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
