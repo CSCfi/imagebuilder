@@ -700,6 +700,13 @@ def main() -> None:
         input_data = json.load(f)
 
     for version in input_data["current"]:
+        logger.debug(
+            {
+                "message": "Checking current image '{version['image_name']}'...",
+                "image": version
+            }
+        )
+
         filename = version["image_url"].split("/")[-1]
 
         new_checksum = validate_checksum(version, filename, conn, cloud)
@@ -731,22 +738,32 @@ def main() -> None:
             ) as f:
                 f.write(new_checksum)
 
-        logger.info(f"{version['image_name']} has been successfully updated")
+        logger.info(f"'{version['image_name']}' has been successfully updated")
 
     for version in input_data["deprecated"]:
+        logger.debug(
+             {
+                "message": "Checking deprecated image '{version['image_name']}'...",
+                "image": version
+             }
+        )
         filename = version["filename"]
         delete_unused_image(conn, version["image_name"])
 
         # It is deprecated so get rid of the files on disk
-        logger.debug(
-            f"Image '{filename}' has been deprecated, deleting from local disk"
-        )
         try:
             if os.path.exists(
                 f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM"
             ):
+                logger.debug(
+                    f"Image '{filename}' has been deprecated, deleting from local disk"
+                )
                 os.remove(
                     f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM"
+                )
+            else:
+                logger.debug(
+                    f"Image '{filename}' not present in local disk"
                 )
         except OSError as error:
             logger.warning(
