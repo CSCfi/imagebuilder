@@ -162,7 +162,7 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
         False if something goes wrong
     """
 
-    print_progressbar = sys.stdout.isatty()
+    print_progressbar = sys.stdout.isatty() or (os.getenv("IMAGEBUILDER_OUTPUT_FORMAT", "JSON") == 'plain')
 
     # Check if the same file already exists on disk
     cur_hash = get_file_hash("tmp/" + filename, hashlib.sha256())
@@ -374,7 +374,7 @@ def validate_checksum(
 
             logger.info(f"{version['image_name']} already up to date")
             # Delete unused if they exist
-            delete_unused_images(conn, version["image_name"], current_img_id)
+            delete_unused_image(conn, version["image_name"], current_img_id)
 
         return None
 
@@ -594,7 +594,7 @@ def create_image(
             None,
         ).id
 
-        delete_unused_images(conn, version["image_name"], current_img_id)
+        delete_unused_image(conn, version["image_name"], current_img_id)
         return None
 
     logger.info("Uploading image")
@@ -630,7 +630,7 @@ def create_image(
     return new_image
 
 
-def delete_unused_images(
+def delete_unused_image(
     conn: openstack.connection.Connection, name: str, skip: str = None
 ) -> bool:
     """
@@ -643,30 +643,31 @@ def delete_unused_images(
         False if the image was fully deleted
     """
 
-    still_using = False
+    result = { "deleted": False, "in_use": False, "image_id": None }
     # Loop over existing images
     for img in conn.image.images(name=name, owner=conn.current_project_id):
         if img.id == skip:
             continue
 
-        # Check if image is unused
-        if (
-            next(conn.compute.servers(image=img.id, all_projects=True), None) is None
-            and next(
-                conn.block_storage.volumes(image_id=img.id, all_projects=True), None
-            )
-            is None
-        ):
-            # Not used by any server nor volume
-            logger.info(f"Deleting image {img.id}")
+        # Check if image is in use
+        servers = list(conn.compute.servers(image=img.id, all_projects=True))
+        volumes = list(conn.block_storage.volumes(image_id=img.id, all_projects=True))
+        if (len(servers) == 0 and len(volumes) == 0):
+            logger.info(f"Image {img.id} not in use in a server or volume, deleting...")
             conn.delete_image(img.id)
+            result = { "deleted": True, "in_use": False, "image_id": img.id }
         elif img.visibility != "community":
-            # used by someone. set to community
-            logger.info(f"Setting image {img.id} to community")
+            logger.info(f"Image {img.id} in use by a server or volume, setting it to community...")
             conn.image.update_image(img.id, visibility="community")
-            still_using = True
+            result = { "deleted": False, "in_use": True, "image_id": img.id }
+        else:
+            logger.debug(
+                f"Image {img.id} is in use by a server or volume and it's a community image" +
+                ", not deleting it..."
+            )
+            result = { "deleted": False, "in_use": True, "image_id": img.id }
 
-    return still_using
+    return result
 
 
 def main() -> None:
@@ -720,7 +721,7 @@ def main() -> None:
         conn.image.update_image(new_image.id, visibility=version["visibility"])
 
         # Remove old ones
-        delete_unused_images(conn, version["image_name"], new_image.id)
+        delete_unused_image(conn, version["image_name"], new_image.id)
 
         if new_checksum != filename:
             with open(
@@ -733,8 +734,8 @@ def main() -> None:
         logger.info(f"{version['image_name']} has been successfully updated")
 
     for version in input_data["deprecated"]:
-
-        still_using = delete_unused_images(conn, version["image_name"])
+        filename = version["filename"]
+        delete_result = delete_unused_image(conn, version["image_name"])
 
         # It is deprecated so get rid of the files on disk
         logger.debug(
@@ -752,7 +753,7 @@ def main() -> None:
                 f"Error removing image '{filename}' from local disk. {error}"
             )
 
-        if not still_using:
+        if not delete_result['in_use']:
             logger.info(f"{version['image_name']} removed completely")
         else:
             logger.info(
