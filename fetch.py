@@ -735,7 +735,7 @@ def main() -> None:
 
     for version in input_data["deprecated"]:
         filename = version["filename"]
-        delete_result = delete_unused_image(conn, version["image_name"])
+        delete_unused_image(conn, version["image_name"])
 
         # It is deprecated so get rid of the files on disk
         logger.debug(
@@ -751,13 +751,6 @@ def main() -> None:
         except OSError as error:
             logger.warning(
                 f"Error removing image '{filename}' from local disk. {error}"
-            )
-
-        if not delete_result['in_use']:
-            logger.info(f"{version['image_name']} removed completely")
-        else:
-            logger.info(
-                f"{version['image_name']} is still used by someone so it is not fully removed"
             )
 
         if version.get("filename"):
