@@ -632,7 +632,7 @@ def create_image(
 
 def delete_unused_image(
     conn: openstack.connection.Connection, name: str, skip: str = None
-) -> bool:
+) -> dict:
     """
     Delete unused images but skip specified image if provided
 
