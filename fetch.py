@@ -638,12 +638,19 @@ def delete_unused_image(
 
     Returns
     -------
-    bool
-        True if at least one old version of the image is still used by a server or a volume
-        False if the image was fully deleted
+    dictionary with deleted and in use images and their ids
     """
 
-    result = { "deleted": False, "in_use": False, "image_id": None }
+    result = {
+        "deleted": {
+            "count": 0,
+            "ids": []
+        },
+        "in_use": {
+            "count": 0,
+            "ids": []
+        }
+    }
     # Loop over existing images
     for img in conn.image.images(name=name, owner=conn.current_project_id):
         if img.id == skip:
@@ -655,17 +662,20 @@ def delete_unused_image(
         if (len(servers) == 0 and len(volumes) == 0):
             logger.info(f"Image {img.id} not in use in a server or volume, deleting...")
             conn.delete_image(img.id)
-            result = { "deleted": True, "in_use": False, "image_id": img.id }
+            result["deleted"]["count"] += 1
+            result["deleted"]["ids"].append(img.id)
         elif img.visibility != "community":
             logger.info(f"Image {img.id} in use by a server or volume, setting it to community...")
             conn.image.update_image(img.id, visibility="community")
-            result = { "deleted": False, "in_use": True, "image_id": img.id }
+            result["in_use"]["count"] += 1
+            result["in_use"]["ids"].append(img.id)
         else:
             logger.debug(
                 f"Image {img.id} is in use by a server or volume and it's a community image" +
                 ", not deleting it..."
             )
-            result = { "deleted": False, "in_use": True, "image_id": img.id }
+            result["in_use"]["count"] += 1
+            result["in_use"]["ids"].append(img.id)
 
     return result
 
@@ -691,6 +701,16 @@ def main() -> None:
     )
 
     conn = openstack.connect(cloud=cloud)
+    summary = {
+        "deleted_images": {
+            "count": 0,
+            "ids": [],
+        },
+        "in_use_images": {
+            "count": 0,
+            "ids": [],
+        }
+    }
 
     # Load file from argv
     input_data = None
@@ -728,7 +748,11 @@ def main() -> None:
         conn.image.update_image(new_image.id, visibility=version["visibility"])
 
         # Remove old ones
-        delete_unused_image(conn, version["image_name"], new_image.id)
+        result = delete_unused_image(conn, version["image_name"], new_image.id)
+        summary["deleted_images"]["count"] += result["deleted"]["count"]
+        summary["in_use_images"]["count"] += result["in_use"]["count"]
+        summary["deleted_images"]["ids"] += result["deleted"]["ids"]
+        summary["in_use_images"]["ids"] += result["in_use"]["ids"]
 
         if new_checksum != filename:
             with open(
@@ -743,7 +767,7 @@ def main() -> None:
     for version in input_data["deprecated"]:
         logger.debug(
              {
-                "message": "Checking deprecated image '{version['image_name']}'...",
+                "message": f"Checking deprecated image '{version["image_name"]}'...",
                 "image": version
              }
         )
@@ -772,6 +796,7 @@ def main() -> None:
 
         if version.get("filename"):
             cleanup_files(version["filename"])
+    logger.info(summary)
 
 
 if __name__ == "__main__":
