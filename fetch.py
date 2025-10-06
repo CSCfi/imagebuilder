@@ -162,7 +162,9 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
         False if something goes wrong
     """
 
-    print_progressbar = sys.stdout.isatty() or (os.getenv("IMAGEBUILDER_OUTPUT_FORMAT", "JSON") == 'plain')
+    print_progressbar = sys.stdout.isatty() or (
+        os.getenv("IMAGEBUILDER_OUTPUT_FORMAT", "JSON") == "plain"
+    )
 
     # Check if the same file already exists on disk
     cur_hash = get_file_hash("tmp/" + filename, hashlib.sha256())
@@ -641,16 +643,7 @@ def delete_unused_image(
     dictionary with deleted and in use images and their ids
     """
 
-    result = {
-        "deleted": {
-            "count": 0,
-            "ids": []
-        },
-        "in_use": {
-            "count": 0,
-            "ids": []
-        }
-    }
+    result = {"deleted": {"count": 0, "ids": []}, "in_use": {"count": 0, "ids": []}}
     # Loop over existing images
     for img in conn.image.images(name=name, owner=conn.current_project_id):
         if img.id == skip:
@@ -659,20 +652,22 @@ def delete_unused_image(
         # Check if image is in use
         servers = list(conn.compute.servers(image=img.id, all_projects=True))
         volumes = list(conn.block_storage.volumes(image_id=img.id, all_projects=True))
-        if (len(servers) == 0 and len(volumes) == 0):
+        if len(servers) == 0 and len(volumes) == 0:
             logger.info(f"Image {img.id} not in use in a server or volume, deleting...")
             conn.delete_image(img.id)
             result["deleted"]["count"] += 1
             result["deleted"]["ids"].append(img.id)
         elif img.visibility != "community":
-            logger.info(f"Image {img.id} in use by a server or volume, setting it to community...")
+            logger.info(
+                f"Image {img.id} in use by a server or volume, setting it to community..."
+            )
             conn.image.update_image(img.id, visibility="community")
             result["in_use"]["count"] += 1
             result["in_use"]["ids"].append(img.id)
         else:
             logger.debug(
-                f"Image {img.id} is in use by a server or volume and it's a community image" +
-                ", not deleting it..."
+                f"Image {img.id} is in use by a server or volume and it's a community image"
+                + ", not deleting it..."
             )
             result["in_use"]["count"] += 1
             result["in_use"]["ids"].append(img.id)
@@ -709,7 +704,7 @@ def main() -> None:
         "in_use_images": {
             "count": 0,
             "ids": [],
-        }
+        },
     }
 
     # Load file from argv
@@ -722,8 +717,8 @@ def main() -> None:
     for version in input_data["current"]:
         logger.debug(
             {
-                "message": "Checking current image '{version['image_name']}'...",
-                "image": version
+                "message": f"Checking current image '{version['image_name']}'...",
+                "image": version,
             }
         )
 
@@ -766,10 +761,10 @@ def main() -> None:
 
     for version in input_data["deprecated"]:
         logger.debug(
-             {
-                "message": f"Checking deprecated image '{version["image_name"]}'...",
-                "image": version
-             }
+            {
+                "message": f"Checking deprecated image '{version['image_name']}'...",
+                "image": version,
+            }
         )
         filename = version["filename"]
         delete_unused_image(conn, version["image_name"])
@@ -786,9 +781,7 @@ def main() -> None:
                     f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM"
                 )
             else:
-                logger.debug(
-                    f"Image '{filename}' not present in local disk"
-                )
+                logger.debug(f"Image '{filename}' not present in local disk")
         except OSError as error:
             logger.warning(
                 f"Error removing image '{filename}' from local disk. {error}"
