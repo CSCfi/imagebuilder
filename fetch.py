@@ -688,7 +688,7 @@ def main() -> None:
         ]
 
         raise EnvironmentError(
-            f"Environtment variables are not set! ({', '.join(missing)})"
+            f"Environment variables are not set! ({', '.join(missing)})"
         )
 
     openstack.enable_logging(
