@@ -17,6 +17,7 @@ from logging.handlers import SysLogHandler
 import yaml
 import requests
 import openstack
+import openstack.exceptions
 
 
 class ImgBuildLogger:
@@ -314,7 +315,7 @@ def validate_checksum(
 
     if not version.get("checksum_url"):
         logger.info(
-            f"Checksum URL not specified for {version['image_name']}. Skipping checksum fetching..."
+            f"Checksum URL not specified for {version['image_name']}. Skipping checksum fetching"
         )
         return filename
 
@@ -640,10 +641,14 @@ def delete_unused_image(
 
     Returns
     -------
-    dictionary with deleted and in use images and their ids
+    dictionary with deleted, in error and in use images and their ids
     """
 
-    result = {"deleted": {"count": 0, "ids": []}, "in_use": {"count": 0, "ids": []}}
+    result = {
+        "deleted": {"count": 0, "ids": []},
+        "in_use": {"count": 0, "ids": []},
+        "errors": {"count": 0, "ids": []},
+    }
     # Loop over existing images
     for img in conn.image.images(name=name, owner=conn.current_project_id):
         if img.id == skip:
@@ -652,22 +657,39 @@ def delete_unused_image(
         # Check if image is in use
         servers = list(conn.compute.servers(image=img.id, all_projects=True))
         volumes = list(conn.block_storage.volumes(image_id=img.id, all_projects=True))
-        if len(servers) == 0 and len(volumes) == 0:
-            logger.info(f"Image {img.id} not in use in a server or volume, deleting...")
-            conn.delete_image(img.id)
-            result["deleted"]["count"] += 1
-            result["deleted"]["ids"].append(img.id)
+        snapshots = list(
+            conn.block_storage.snapshots(image_id=img.id, all_projects=True)
+        )
+        if len(servers) == 0 and len(volumes) == 0 and len(snapshots) == 0:
+            logger.info(
+                f"Image {img.id} not in use in a server, snapshot or volume, deleting..."
+            )
+            try:
+                conn.delete_image(img.id)
+                result["deleted"]["count"] += 1
+                result["deleted"]["ids"].append(img.id)
+            except openstack.exceptions.ConflictException as error:
+                result["errors"]["count"] += 1
+                result["errors"]["ids"].append(img.id)
+                logger.error(
+                    {
+                        "message": "Error deleting image",
+                        "image_id": img.id,
+                        "error": error,
+                    }
+                )
         elif img.visibility != "community":
             logger.info(
-                f"Image {img.id} in use by a server or volume, setting it to community..."
+                f"Image {img.id} in use by a server, snapshot or volume"
+                + " setting it to community..."
             )
             conn.image.update_image(img.id, visibility="community")
             result["in_use"]["count"] += 1
             result["in_use"]["ids"].append(img.id)
         else:
             logger.debug(
-                f"Image {img.id} is in use by a server or volume or it's a community image"
-                + ", not deleting it..."
+                f"Image {img.id} is in use by a server, snapshot or volume or it's a community"
+                + " image, not deleting it..."
             )
             result["in_use"]["count"] += 1
             result["in_use"]["ids"].append(img.id)
@@ -702,6 +724,10 @@ def main() -> None:
             "ids": [],
         },
         "in_use_images": {
+            "count": 0,
+            "ids": [],
+        },
+        "errors": {
             "count": 0,
             "ids": [],
         },
@@ -789,7 +815,7 @@ def main() -> None:
 
         if version.get("filename"):
             cleanup_files(version["filename"])
-    logger.info(summary)
+    logger.info({"summary": summary})
 
 
 if __name__ == "__main__":
