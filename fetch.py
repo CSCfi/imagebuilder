@@ -654,7 +654,7 @@ def delete_unused_image(
         "errors": {
             "count": 0, "ids": []
         }
-        }
+    }
     # Loop over existing images
     for img in conn.image.images(name=name, owner=conn.current_project_id):
         if img.id == skip:
