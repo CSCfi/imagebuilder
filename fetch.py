@@ -689,8 +689,8 @@ def delete_unused_image(
             result["in_use"]["ids"].append(img.id)
         else:
             logger.debug(
-                f"Image {img.id} is in use by a server, snapshot or volume or it's a community image"
-                + ", not deleting it..."
+                f"Image {img.id} is in use by a server, snapshot or volume or it's a community"
+                + " image, not deleting it..."
             )
             result["in_use"]["count"] += 1
             result["in_use"]["ids"].append(img.id)
