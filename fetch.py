@@ -665,7 +665,7 @@ def delete_unused_image(
         volumes = list(conn.block_storage.volumes(image_id=img.id, all_projects=True))
         snapshots = list(conn.block_storage.snapshots(image_id=img.id, all_projects=True))
         if len(servers) == 0 and len(volumes) == 0 and len(snapshots) == 0:
-            logger.info(f"Image {img.id} not in use in a server or volume, deleting...")
+            logger.info(f"Image {img.id} not in use in a server, snapshot or volume, deleting...")
             try:
                 conn.delete_image(img.id)
                 result["deleted"]["count"] += 1
@@ -682,7 +682,8 @@ def delete_unused_image(
                 )
         elif img.visibility != "community":
             logger.info(
-                f"Image {img.id} in use by a server, snapshot or volume, setting it to community..."
+                f"Image {img.id} in use by a server, snapshot or volume" +
+                " setting it to community..."
             )
             conn.image.update_image(img.id, visibility="community")
             result["in_use"]["count"] += 1
