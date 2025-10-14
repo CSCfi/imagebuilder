@@ -730,7 +730,7 @@ def main() -> None:
         },
         "errors": {
             "count": 0,
-            "ids": []
+            "ids": [],
         }
     }
 
