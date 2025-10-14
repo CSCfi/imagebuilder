@@ -641,7 +641,7 @@ def delete_unused_image(
 
     Returns
     -------
-    dictionary with deleted and in use images and their ids
+    dictionary with deleted, in error and in use images and their ids
     """
 
     result = {
