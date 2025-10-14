@@ -644,7 +644,17 @@ def delete_unused_image(
     dictionary with deleted and in use images and their ids
     """
 
-    result = {"deleted": {"count": 0, "ids": []}, "in_use": {"count": 0, "ids": []}}
+    result = {
+        "deleted": {
+            "count": 0, "ids": []
+        },
+        "in_use": {
+            "count": 0, "ids": []
+        },
+        "errors": {
+            "count": 0, "ids": []
+        }
+        }
     # Loop over existing images
     for img in conn.image.images(name=name, owner=conn.current_project_id):
         if img.id == skip:
@@ -661,6 +671,8 @@ def delete_unused_image(
                 result["deleted"]["count"] += 1
                 result["deleted"]["ids"].append(img.id)
             except openstack.exceptions.ConflictException as error:
+                result["errors"]["count"] += 1
+                result["errors"]["ids"].append(img.id)
                 logger.error(
                     {
                         "message": "Error deleting image",
@@ -716,6 +728,10 @@ def main() -> None:
             "count": 0,
             "ids": [],
         },
+        "errors": {
+            "count": 0,
+            "ids": []
+        }
     }
 
     # Load file from argv
@@ -800,7 +816,7 @@ def main() -> None:
 
         if version.get("filename"):
             cleanup_files(version["filename"])
-    logger.info(summary)
+    logger.info({"summary": summary})
 
 
 if __name__ == "__main__":
