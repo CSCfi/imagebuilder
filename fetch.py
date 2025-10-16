@@ -825,6 +825,7 @@ def main() -> None:
         if version.get("filename"):
             cleanup_files(version["filename"])
     summary['duration'] = time.time() - summary['duration']
+    summary['exit_code'] = logger.exit_code
     logger.info({"summary": summary})
 
 
