@@ -27,6 +27,7 @@ def get_run_data(filename: str, cloud: str) -> dict:
     try:
         with open(filename, "r", encoding="utf-8") as f:
             content = f.read()
+            print(f"Log contain {len(content)} lines")
     except IOError as error:
         print(f"Failed to open file: {error}")
         sys.exit(NAGIOS_STATE_CRITICAL)
@@ -44,7 +45,7 @@ def get_run_data(filename: str, cloud: str) -> dict:
                 print(f"Log json '{filename}' could not be decoded: {error}")
                 sys.exit(NAGIOS_STATE_CRITICAL)
             return json_data
-    print(f"No finished runs in the log file '{filename}!")
+    print(f"No finished runs in the log file '{filename}'!")
     sys.exit(NAGIOS_STATE_CRITICAL)
 
 
