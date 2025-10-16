@@ -102,20 +102,6 @@ def main() -> None:
             nagios_output += f"=== {img} ===\n"
             seen_images.append(img)
 
-            for msg in run_data["summary"][image_list][img]["events"]:
-
-                if msg["level"] == "WARNING":
-                    if nagios_state != NAGIOS_STATE_CRITICAL:
-                        nagios_state = NAGIOS_STATE_WARNING
-                    nagios_output += msg["content"] + "\n"
-
-                elif msg["level"] == "ERROR":
-                    nagios_state = NAGIOS_STATE_CRITICAL
-                    nagios_output += msg["content"] + "\n"
-
-                elif msg.get("important"):
-                    nagios_output += msg["content"] + "\n"
-
         if set(images) - set(seen_images):  # Not seen
             nagios_output += (
                 f"Images not seen in the log that should've been there ({image_list}): "
