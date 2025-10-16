@@ -36,11 +36,11 @@ def get_run_data(filename: str, cloud: str) -> dict:
                 sys.exit(NAGIOS_STATE_WARNING)
 
             json_data = json.loads(content)
-    except IOError as e:
-        print(f"Failed to open file: {e}")
+    except IOError as error:
+        print(f"Failed to open file: {error}")
         sys.exit(NAGIOS_STATE_CRITICAL)
-    except json.decoder.JSONDecodeError as e:
-        print(f"Log json could not be decoded: {e}")
+    except json.decoder.JSONDecodeError as error:
+        print(f"Log json '{filename}' could not be decoded: {error}")
         sys.exit(NAGIOS_STATE_CRITICAL)
 
     for run in reversed(json_data):
