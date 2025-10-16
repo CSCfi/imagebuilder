@@ -84,7 +84,7 @@ def main() -> None:
 
     run_data = get_run_data(filename, cloud)
 
-    if time.time() - run_data["duration"] > WAITED_FOR_TOO_LONG:
+    if time.time() - run_data["timestamp"] > WAITED_FOR_TOO_LONG:
         print(
             f"Imagebuilder was run last time more than {WAITED_FOR_TOO_LONG/3600} hours ago!"
         )
