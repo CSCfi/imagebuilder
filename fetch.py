@@ -779,7 +779,7 @@ def main() -> None:
         # Remove old ones
         result = delete_unused_image(conn, version["image_name"], new_image.id)
         summary["current"][version["image_name"]]['state'] = "Ok"
-        summary["current"][version["image_name"]]['result'] = result
+        summary["current"][version["image_name"]]['old_images_delete_result'] = result
         summary["deleted_images"]["count"] += result["deleted"]["count"]
         summary["in_use_images"]["count"] += result["in_use"]["count"]
         summary["deleted_images"]["ids"] += result["deleted"]["ids"]
