@@ -744,7 +744,9 @@ def main() -> None:
         input_data = json.load(f)
 
     for version in input_data["current"]:
-        summary["current"][version["image_name"]] = {}
+        summary["current"][version["image_name"]] = {
+            "state": None,
+        }
         logger.debug(
             {
                 "message": f"Checking current image '{version['image_name']}'...",
@@ -758,6 +760,7 @@ def main() -> None:
 
         if new_checksum is None:
             logger.debug(f"Image '{filename}' didn't change in remote source.")
+            summary["current"][version["image_name"]]['state'] = "No remote change"
             continue
 
         logger.info(f"Downloading {version['image_name']}")
@@ -766,6 +769,7 @@ def main() -> None:
 
         if new_image is None:
             logger.debug("Image is already up to date or there was an error")
+            summary["current"][version["image_name"]]['state'] = "Up-to-date or error creating image"
             continue
 
         # Everything is ok! Set visibility to what it should be
@@ -774,7 +778,8 @@ def main() -> None:
 
         # Remove old ones
         result = delete_unused_image(conn, version["image_name"], new_image.id)
-        summary["current"][version["image_name"]] = result
+        summary["current"][version["image_name"]]['state'] = "Ok"
+        summary["current"][version["image_name"]]['result'] = result
         summary["deleted_images"]["count"] += result["deleted"]["count"]
         summary["in_use_images"]["count"] += result["in_use"]["count"]
         summary["deleted_images"]["ids"] += result["deleted"]["ids"]
