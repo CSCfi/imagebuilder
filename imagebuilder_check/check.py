@@ -44,7 +44,7 @@ def get_run_data(filename: str, cloud: str) -> dict:
                 print(f"Log json '{filename}' could not be decoded: {error}")
                 sys.exit(NAGIOS_STATE_CRITICAL)
             return json_data
-    print("No finished runs in the log files!")
+    print(f"No finished runs in the log file '{filename}!")
     sys.exit(NAGIOS_STATE_CRITICAL)
 
 
