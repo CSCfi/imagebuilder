@@ -129,6 +129,11 @@ def main() -> None:
                 f"{set(seen_images) - set(images)}\n"
             )
             nagios_state = NAGIOS_STATE_CRITICAL
+    if 'exit_code' in run_data:
+        if run_data['exit_code'] > 0 and nagios_state != NAGIOS_STATE_CRITICAL:
+            nagios_state = NAGIOS_STATE_WARNING
+        if run_data['exit_code'] > 1:
+            nagios_state = NAGIOS_STATE_CRITICAL
 
     print(nagios_output.strip())
     sys.exit(nagios_state)
