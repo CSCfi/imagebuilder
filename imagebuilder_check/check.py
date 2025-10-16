@@ -26,7 +26,7 @@ def get_run_data(filename: str, cloud: str) -> dict:
     json_data = None
     try:
         with open(filename, "r", encoding="utf-8") as f:
-            content = f.read()
+            content = f.readlines)
             print(f"Log contain {len(content)} lines")
     except IOError as error:
         print(f"Failed to open file: {error}")
