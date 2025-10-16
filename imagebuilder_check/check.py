@@ -91,7 +91,7 @@ def main() -> None:
         sys.exit(NAGIOS_STATE_CRITICAL)
 
     nagios_state = NAGIOS_STATE_OK
-    nagios_output = ""
+    nagios_output = f"Last run {time.time() - run_data['timestamp']} seconds ago\n"
 
     for image_list in ("current", "deprecated"):
         nagios_output += f"=== {image_list} images ===\n"
