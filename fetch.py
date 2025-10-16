@@ -719,6 +719,9 @@ def main() -> None:
 
     conn = openstack.connect(cloud=cloud)
     summary = {
+        "duration": time.time(),
+        "current": {},
+        "deprecated": {},
         "deleted_images": {
             "count": 0,
             "ids": [],
@@ -770,6 +773,7 @@ def main() -> None:
 
         # Remove old ones
         result = delete_unused_image(conn, version["image_name"], new_image.id)
+        summary["current"][version["image_name"]] = result
         summary["deleted_images"]["count"] += result["deleted"]["count"]
         summary["in_use_images"]["count"] += result["in_use"]["count"]
         summary["deleted_images"]["ids"] += result["deleted"]["ids"]
@@ -793,7 +797,12 @@ def main() -> None:
             }
         )
         filename = version["filename"]
-        delete_unused_image(conn, version["image_name"])
+        result = delete_unused_image(conn, version["image_name"])
+        summary["deprecated"][version["image_name"]] = result
+        summary["deleted_images"]["count"] += result["deleted"]["count"]
+        summary["in_use_images"]["count"] += result["in_use"]["count"]
+        summary["deleted_images"]["ids"] += result["deleted"]["ids"]
+        summary["in_use_images"]["ids"] += result["in_use"]["ids"]
 
         # It is deprecated so get rid of the files on disk
         try:
@@ -815,6 +824,7 @@ def main() -> None:
 
         if version.get("filename"):
             cleanup_files(version["filename"])
+    summary['duration'] = time.time() - summary['duration']
     logger.info({"summary": summary})
 
 

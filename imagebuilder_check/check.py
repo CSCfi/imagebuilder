@@ -27,27 +27,24 @@ def get_run_data(filename: str, cloud: str) -> dict:
     try:
         with open(filename, "r", encoding="utf-8") as f:
             content = f.read()
-
-            if not content:
-                print("The given log file is empty and therefore cannot be analyzed")
-                print(
-                    "This is most likely caused by the log being rotated and it will fix itself"
-                )
-                sys.exit(NAGIOS_STATE_WARNING)
-
-            json_data = json.loads(content)
     except IOError as error:
         print(f"Failed to open file: {error}")
         sys.exit(NAGIOS_STATE_CRITICAL)
-    except json.decoder.JSONDecodeError as error:
-        print(f"Log json '{filename}' could not be decoded: {error}")
-        sys.exit(NAGIOS_STATE_CRITICAL)
-
-    for run in reversed(json_data):
-        if run["cloud"] == cloud:
-            return run
-
-    print("No runs in the log files!")
+    if not content:
+        print("The given log file is empty and therefore cannot be analyzed")
+        print(
+            "This is most likely caused by the log being rotated and it will fix itself"
+        )
+        sys.exit(NAGIOS_STATE_WARNING)
+    for line in reversed(content):
+        if '"summary"' in line:
+            try:
+                json_data = json.loads(line)
+            except json.decoder.JSONDecodeError as error:
+                print(f"Log json '{filename}' could not be decoded: {error}")
+                sys.exit(NAGIOS_STATE_CRITICAL)
+            return json_data
+    print("No finished runs in the log files!")
     sys.exit(NAGIOS_STATE_CRITICAL)
 
 
@@ -86,11 +83,7 @@ def main() -> None:
 
     run_data = get_run_data(filename, cloud)
 
-    if (
-        datetime.now()
-        - datetime.strptime(run_data["start_timestamp"], "%Y-%m-%d %H:%M:%S.%f")
-    ).total_seconds() > WAITED_FOR_TOO_LONG:
-
+    if datetime.now().total_seconds() - run_data["duration"] > WAITED_FOR_TOO_LONG:
         print(
             f"Imagebuilder was run last time more than {WAITED_FOR_TOO_LONG/3600} hours ago!"
         )
@@ -99,16 +92,16 @@ def main() -> None:
     nagios_state = NAGIOS_STATE_OK
     nagios_output = ""
 
-    for arr in ("current", "deprecated"):
+    for image_list in ("current", "deprecated"):
 
-        images = [v["image_name"] for v in input_json_data[arr]]
+        images = [v["image_name"] for v in input_json_data[image_list]]
         seen_images = []
 
-        for img in run_data[arr]:
+        for img in run_data[image_list]:
             nagios_output += f"=== {img} ===\n"
             seen_images.append(img)
 
-            for msg in run_data[arr][img]["events"]:
+            for msg in run_data[image_list][img]["events"]:
 
                 if msg["level"] == "WARNING":
                     if nagios_state != NAGIOS_STATE_CRITICAL:
@@ -124,14 +117,14 @@ def main() -> None:
 
         if set(images) - set(seen_images):  # Not seen
             nagios_output += (
-                f"Images not seen in the log that should've been there ({arr}): "
+                f"Images not seen in the log that should've been there ({image_list}): "
                 f"{set(images) - set(seen_images)}\n"
             )
             nagios_state = NAGIOS_STATE_CRITICAL
 
         if set(seen_images) - set(images):  # Extra images
             nagios_output += (
-                f"Images seen in the log that were not supposed to be there ({arr}): "
+                f"Images seen in the log that were not supposed to be there ({image_list}): "
                 f"{set(seen_images) - set(images)}\n"
             )
             nagios_state = NAGIOS_STATE_CRITICAL
