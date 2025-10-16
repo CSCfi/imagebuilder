@@ -44,7 +44,7 @@ def get_run_data(filename: str, cloud: str) -> dict:
             except json.decoder.JSONDecodeError as error:
                 print(f"Log json '{filename}' could not be decoded: {error}")
                 sys.exit(NAGIOS_STATE_CRITICAL)
-            return json_data["summary"]
+            return json_data
     print(f"No finished runs in the log file '{filename}'!")
     sys.exit(NAGIOS_STATE_CRITICAL)
 
@@ -98,11 +98,11 @@ def main() -> None:
         images = [v["image_name"] for v in input_json_data[image_list]]
         seen_images = []
 
-        for img in run_data[image_list]:
+        for img in run_data["summary"][image_list]:
             nagios_output += f"=== {img} ===\n"
             seen_images.append(img)
 
-            for msg in run_data[image_list][img]["events"]:
+            for msg in run_data["summary"][image_list][img]["events"]:
 
                 if msg["level"] == "WARNING":
                     if nagios_state != NAGIOS_STATE_CRITICAL:
@@ -129,10 +129,10 @@ def main() -> None:
                 f"{set(seen_images) - set(images)}\n"
             )
             nagios_state = NAGIOS_STATE_CRITICAL
-    if 'exit_code' in run_data:
-        if run_data['exit_code'] > 0 and nagios_state != NAGIOS_STATE_CRITICAL:
+    if 'exit_code' in run_data["summary"]:
+        if run_data["summary"]['exit_code'] > 0 and nagios_state != NAGIOS_STATE_CRITICAL:
             nagios_state = NAGIOS_STATE_WARNING
-        if run_data['exit_code'] > 1:
+        if run_data["summary"]['exit_code'] > 1:
             nagios_state = NAGIOS_STATE_CRITICAL
 
     print(nagios_output.strip())
