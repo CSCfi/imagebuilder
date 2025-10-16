@@ -757,19 +757,14 @@ def main() -> None:
 
         if new_checksum is None:
             logger.debug(f"Image '{filename}' didn't change in remote source.")
-            continue
-
-        logger.info(f"Downloading {version['image_name']}")
-
-        new_image = create_image(conn, version, filename, new_checksum, network)
-
-        if new_image is None:
-            logger.debug("Image is already up to date or there was an error")
-            continue
-
-        # Everything is ok! Set visibility to what it should be
-        logger.info(f"Setting image to {version['visibility']}")
-        conn.image.update_image(new_image.id, visibility=version["visibility"])
+        else:
+            logger.info(f"Downloading {version['image_name']}")
+            new_image = create_image(conn, version, filename, new_checksum, network)
+            if new_image is None:
+                logger.debug("Image is already up to date or there was an error")
+            # Everything is ok! Set visibility to what it should be
+            logger.info(f"Setting image to {version['visibility']}")
+            conn.image.update_image(new_image.id, visibility=version["visibility"])
 
         # Remove old ones
         result = delete_unused_image(conn, version["image_name"], new_image.id)
