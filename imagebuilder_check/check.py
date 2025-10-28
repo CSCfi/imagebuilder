@@ -37,15 +37,23 @@ def get_run_data(filename: str, cloud: str) -> dict:
         )
         sys.exit(NAGIOS_STATE_WARNING)
     for line in reversed(content):
+        if '"error"' in line and json_data:
+            json_data["errors"].append(json.loads(line))
         if '"summary"' in line:
-            try:
-                json_data = json.loads(line)
-            except json.decoder.JSONDecodeError as error:
-                print(f"Log json '{filename}' could not be decoded: {error}")
-                sys.exit(NAGIOS_STATE_CRITICAL)
-            return json_data
-    print(f"No finished runs in the log file '{filename}'!")
-    sys.exit(NAGIOS_STATE_CRITICAL)
+            if not json_data:
+                try:
+                    json_data = json.loads(line)
+                    json_data["errors"] = []
+                except json.decoder.JSONDecodeError as error:
+                    print(f"Log json '{filename}' could not be decoded: {error}")
+                    sys.exit(NAGIOS_STATE_CRITICAL)
+            else:
+                break # Stop reading when the second 'summary' has been found
+    if json_data:
+        return json_data
+    else:
+        print(f"No finished runs in the log file '{filename}'!")
+        sys.exit(NAGIOS_STATE_CRITICAL)
 
 
 def main() -> None:
@@ -91,6 +99,8 @@ def main() -> None:
 
     nagios_state = NAGIOS_STATE_OK
     nagios_output = f"Last run {time.time() - run_data['timestamp']} seconds ago\n"
+    for error in run_data["errors"]:
+        nagios_output += error
 
     for image_list in ("current", "deprecated"):
         nagios_output += f"=== {image_list} images ===\n"
