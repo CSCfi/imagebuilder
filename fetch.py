@@ -500,9 +500,13 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
             timeout=360,
             security_groups=[secgroup.id],
         )
-    except openstack.exceptions.SDKException as e:
-        logger.error("Server failed to be created!")
-        logger.error(str(e))
+    except openstack.exceptions.SDKException as error:
+        logger.error(
+            {
+                "message": f"Error creating server. {error}",
+                "image_name": image.name
+            }
+        )
         return False
 
     logger.info(f"Server with id ({test_server.id}) created")
@@ -511,7 +515,12 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
 
     if found_test_server["status"] == "ERROR":
         conn.delete_server(test_server.id)
-        logger.error(f"Server {test_server.id} failed to start with image {image.id}!")
+        logger.error(
+            {
+                "message": f"Server {test_server.id} failed to start with image {image.id}!",
+                "image_name": image.name
+            }
+        )
         return False
 
     # Test pinging
@@ -520,7 +529,12 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
     conn.delete_server(test_server.id, wait=True)
 
     if not ping_result:
-        logger.error(f"Server {test_server.id} failed to respond to ping!")
+        logger.error(
+            {
+                "message": f"Server {test_server.id} failed to respond to ping!",
+                "image_name": image.name
+            }
+        )
         return False
 
     logger.info("All tests ok!")
@@ -621,7 +635,12 @@ def create_image(
     )
 
     if new_image is None:
-        logger.error("An error occured while creating the image")
+        logger.error(
+            {
+                "message": "An error occured while creating the image",
+                "image": version
+            }
+        )
         return None
 
     logger.info(f"Image with id ({new_image.id}) created")
