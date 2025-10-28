@@ -115,10 +115,21 @@ def main() -> None:
             )
             nagios_state = NAGIOS_STATE_CRITICAL
     if 'exit_code' in run_data["summary"]:
-        if run_data["summary"]['exit_code'] > 0 and nagios_state != NAGIOS_STATE_CRITICAL:
+        if run_data["summary"]['exit_code'] == 1 and nagios_state != NAGIOS_STATE_CRITICAL:
+            nagios_output += (
+                "Last exit code for imagebuilder was "
+                + f"{run_data['summary']['exit_code']}"
+            )
             nagios_state = NAGIOS_STATE_WARNING
         if run_data["summary"]['exit_code'] > 1:
+            nagios_output += (
+                "Last exit code for imagebuilder was "
+                + f"{run_data['summary']['exit_code']}"
+            )
             nagios_state = NAGIOS_STATE_CRITICAL
+    else:
+        nagios_output += "Last exit code for imagebuilder was not summarized"
+        nagios_state = NAGIOS_STATE_WARNING
 
     print(nagios_output.strip())
     sys.exit(nagios_state)
