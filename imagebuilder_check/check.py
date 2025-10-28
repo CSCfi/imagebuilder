@@ -100,7 +100,7 @@ def main() -> None:
     nagios_state = NAGIOS_STATE_OK
     nagios_output = f"Last run {time.time() - run_data['timestamp']} seconds ago\n"
     for error in run_data["errors"]:
-        nagios_output += error
+        nagios_output += f"Error in last run: {error}\n"
 
     for image_list in ("current", "deprecated"):
         nagios_output += f"=== {image_list} images ===\n"
@@ -128,13 +128,13 @@ def main() -> None:
         if run_data["summary"]['exit_code'] == 1 and nagios_state != NAGIOS_STATE_CRITICAL:
             nagios_output += (
                 "Last exit code for imagebuilder was "
-                + f"{run_data['summary']['exit_code']}"
+                + f"{run_data['summary']['exit_code']}\n"
             )
             nagios_state = NAGIOS_STATE_WARNING
         if run_data["summary"]['exit_code'] > 1:
             nagios_output += (
                 "Last exit code for imagebuilder was "
-                + f"{run_data['summary']['exit_code']}"
+                + f"{run_data['summary']['exit_code']}\n"
             )
             nagios_state = NAGIOS_STATE_CRITICAL
     else:
