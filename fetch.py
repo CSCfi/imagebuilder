@@ -504,7 +504,10 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         logger.error(
             {
                 "message": f"Error creating server. {error}",
-                "image_name": image.name
+                "image": image,
+                "network": network,
+                "security_groups": secgroup,
+                "server_name": image.name + "_TESTSERVER",
             }
         )
         return False
