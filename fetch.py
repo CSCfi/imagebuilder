@@ -438,7 +438,11 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
     return False
 
 
-def test_image(conn: openstack.connection.Connection, image: any, network: str) -> bool:
+def test_image(
+        conn: openstack.connection.Connection,
+        image: any,
+        network: str,
+        timeout: int) -> bool:
     """
     Test the newly created image by creating a test server and pinging it
     Returns
@@ -497,7 +501,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
             wait=True,
             auto_ip=False,
             network=network,
-            timeout=600,
+            timeout=timeout,
             security_groups=[secgroup.id],
         )
     except openstack.exceptions.SDKException as error:
@@ -508,6 +512,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
                 "network": network,
                 "security_groups": secgroup.id,
                 "server_name": image.name + "_TESTSERVER",
+                "timeout": timeout,
             }
         )
         return False
@@ -580,6 +585,11 @@ def create_image(
         If the image is already up to date or if there's an error None is returned
     """
 
+    if "timeout" in version:
+        timeout = version["timeout"]
+    else:
+        timeout = 600
+
     # Download image
     if not download_image(version["image_url"], filename, new_checksum):
         cleanup_files(filename)
@@ -649,7 +659,7 @@ def create_image(
     logger.info(f"Image with id ({new_image.id}) created")
 
     # Test image
-    if not test_image(conn, new_image, network):
+    if not test_image(conn, new_image, network, timeout):
         return None
 
     return new_image
