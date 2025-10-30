@@ -497,7 +497,7 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
             wait=True,
             auto_ip=False,
             network=network,
-            timeout=360,
+            timeout=600,
             security_groups=[secgroup.id],
         )
     except openstack.exceptions.SDKException as error:
