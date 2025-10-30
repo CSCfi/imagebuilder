@@ -442,7 +442,8 @@ def test_image(
         conn: openstack.connection.Connection,
         image: any,
         network: str,
-        timeout: int) -> bool:
+        timeout: int,
+        flavor: str) -> bool:
     """
     Test the newly created image by creating a test server and pinging it
     Returns
@@ -497,7 +498,7 @@ def test_image(
         test_server = conn.create_server(
             name=image.name + "_TESTSERVER",
             image=image,
-            flavor="standard.tiny",
+            flavor=flavor,
             wait=True,
             auto_ip=False,
             network=network,
@@ -589,6 +590,10 @@ def create_image(
         timeout = version["timeout"]
     else:
         timeout = 600
+    if "flavor" in version:
+        flavor = version["flavor"]
+    else:
+        flavor = "standard.tiny"
 
     # Download image
     if not download_image(version["image_url"], filename, new_checksum):
@@ -659,7 +664,7 @@ def create_image(
     logger.info(f"Image with id ({new_image.id}) created")
 
     # Test image
-    if not test_image(conn, new_image, network, timeout):
+    if not test_image(conn, new_image, network, timeout, flavor):
         return None
 
     return new_image
