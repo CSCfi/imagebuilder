@@ -781,7 +781,8 @@ def main() -> None:
         input_data = json.load(f)
 
     for version in input_data["current"]:
-        summary["current"][version["image_name"]] = {
+        version_name = version["image_name"]
+        summary["current"][version_name] = {
             "state": None,
         }
         logger.debug(
@@ -797,7 +798,7 @@ def main() -> None:
 
         if new_checksum is None:
             logger.debug(f"Image '{filename}' didn't change in remote source.")
-            summary["current"][version["image_name"]]['state'] = "No remote change"
+            summary["current"][version_name]['state'] = "No remote change"
             continue
 
         logger.info(f"Downloading {version['image_name']}")
@@ -806,7 +807,7 @@ def main() -> None:
 
         if new_image is None:
             logger.debug("Image is already up to date or there was an error")
-            summary["current"][version["image_name"]]['state'] = "Up-to-date or error creating image"
+            summary["current"][version_name]['state'] = "Up-to-date or error creating image"
             continue
 
         # Everything is ok! Set visibility to what it should be
@@ -814,9 +815,9 @@ def main() -> None:
         conn.image.update_image(new_image.id, visibility=version["visibility"])
 
         # Remove old ones
-        result = delete_unused_image(conn, version["image_name"], new_image.id)
-        summary["current"][version["image_name"]]['state'] = "Ok"
-        summary["current"][version["image_name"]]['old_images_delete_result'] = result
+        result = delete_unused_image(conn, version_name, new_image.id)
+        summary["current"][version_name]['state'] = "Ok"
+        summary["current"][version_name]['old_images_delete_result'] = result
         summary["deleted_images"]["count"] += result["deleted"]["count"]
         summary["in_use_images"]["count"] += result["in_use"]["count"]
         summary["deleted_images"]["ids"] += result["deleted"]["ids"]
@@ -824,15 +825,16 @@ def main() -> None:
 
         if new_checksum != filename:
             with open(
-                f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
+                f"checksums/{cloud}_{version_name.replace(' ', '_')}_CHECKSUM",
                 "w",
                 encoding="utf-8",
             ) as f:
                 f.write(new_checksum)
 
-        logger.info(f"'{version['image_name']}' has been successfully updated")
+        logger.info(f"'{version_name}' has been successfully updated")
 
     for version in input_data["deprecated"]:
+        version_name = version["image_name"]
         logger.debug(
             {
                 "message": f"Checking deprecated image '{version['image_name']}'...",
@@ -840,8 +842,8 @@ def main() -> None:
             }
         )
         filename = version["filename"]
-        result = delete_unused_image(conn, version["image_name"])
-        summary["deprecated"][version["image_name"]] = result
+        result = delete_unused_image(conn, version_name)
+        summary["deprecated"][version_name] = result
         summary["deleted_images"]["count"] += result["deleted"]["count"]
         summary["in_use_images"]["count"] += result["in_use"]["count"]
         summary["deleted_images"]["ids"] += result["deleted"]["ids"]
@@ -850,13 +852,13 @@ def main() -> None:
         # It is deprecated so get rid of the files on disk
         try:
             if os.path.exists(
-                f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM"
+                f"checksums/{cloud}_{version_name.replace(' ', '_')}_CHECKSUM"
             ):
                 logger.debug(
                     f"Image '{filename}' has been deprecated, deleting from local disk"
                 )
                 os.remove(
-                    f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM"
+                    f"checksums/{cloud}_{version_name.replace(' ', '_')}_CHECKSUM"
                 )
             else:
                 logger.debug(f"Image '{filename}' not present in local disk")

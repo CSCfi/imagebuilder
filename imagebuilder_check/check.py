@@ -23,7 +23,7 @@ def get_run_data(filename: str, cloud: str) -> dict:
     dict
         Dictionary containing the data of the last run
     """
-    json_data = None
+    json_data = { "errors": [] }
     try:
         with open(filename, "r", encoding="utf-8") as f:
             content = f.readlines()
@@ -49,7 +49,7 @@ def get_run_data(filename: str, cloud: str) -> dict:
                     sys.exit(NAGIOS_STATE_CRITICAL)
             else:
                 break # Stop reading when the second 'summary' has been found
-    if json_data:
+    if json_data != { "errors": [] }:
         return json_data
     else:
         print(f"No finished runs in the log file '{filename}'!")
