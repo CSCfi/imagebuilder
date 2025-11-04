@@ -14,9 +14,9 @@ NAGIOS_STATE_CRITICAL = 2
 WAITED_FOR_TOO_LONG = 90000  # 25 hours
 
 
-def get_run_data(filename: str, cloud: str) -> dict:
+def get_run_data(filename: str) -> dict:
     """
-    Loads filename and finds the last run of cloud
+    Loads filename and finds the last run
 
     Returns
     -------
@@ -51,9 +51,8 @@ def get_run_data(filename: str, cloud: str) -> dict:
                 break # Stop reading when the second 'summary' has been found
     if json_data != { "errors": [] }:
         return json_data
-    else:
-        print(f"No finished runs in the log file '{filename}'!")
-        sys.exit(NAGIOS_STATE_CRITICAL)
+    print(f"No finished runs in the log file '{filename}'!")
+    sys.exit(NAGIOS_STATE_CRITICAL)
 
 
 def main() -> None:

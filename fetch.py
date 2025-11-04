@@ -117,13 +117,13 @@ class ImgBuildLogger:
         return self._code
 
 
-cloud = os.getenv(
+cloud_name = os.getenv(
     "IMAGEBUILDER_CLOUD"
 )  # get it once to avoid potential race conditions
-network = os.getenv("IMAGEBUILDER_NETWORK")
+network_name = os.getenv("IMAGEBUILDER_NETWORK")
 
 logger = ImgBuildLogger(
-    log_file=os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}_log.json"),
+    log_file=os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud_name}_log.json"),
     output_format=os.getenv("IMAGEBUILDER_OUTPUT_FORMAT", "JSON"),
     debug_level=os.getenv("IMAGEBUILDER_DEBUG_LEVEL", "INFO"),
 )
@@ -738,7 +738,7 @@ def main() -> None:
     """
     Reads defined images from input.json, downloads new images and deprecates old ones
     """
-    if cloud is None or network is None:
+    if cloud_name is None or network_name is None:
 
         missing = [
             x
@@ -754,7 +754,7 @@ def main() -> None:
         debug=(os.getenv("IMAGEBUILDER_OPENSTACK_DEBUG_LEVEL") is not None)
     )
 
-    conn = openstack.connect(cloud=cloud)
+    conn = openstack.connect(cloud=cloud_name)
     summary = {
         "duration": time.time(),
         "current": {},
@@ -794,7 +794,7 @@ def main() -> None:
 
         filename = version["image_url"].split("/")[-1]
 
-        new_checksum = validate_checksum(version, filename, conn, cloud)
+        new_checksum = validate_checksum(version, filename, conn, cloud_name)
 
         if new_checksum is None:
             logger.debug(f"Image '{filename}' didn't change in remote source.")
@@ -803,7 +803,7 @@ def main() -> None:
 
         logger.info(f"Downloading {version['image_name']}")
 
-        new_image = create_image(conn, version, filename, new_checksum, network)
+        new_image = create_image(conn, version, filename, new_checksum, network_name)
 
         if new_image is None:
             logger.debug("Image is already up to date or there was an error")
@@ -825,7 +825,7 @@ def main() -> None:
 
         if new_checksum != filename:
             with open(
-                f"checksums/{cloud}_{version_name.replace(' ', '_')}_CHECKSUM",
+                f"checksums/{cloud_name}_{version_name.replace(' ', '_')}_CHECKSUM",
                 "w",
                 encoding="utf-8",
             ) as f:
@@ -852,13 +852,13 @@ def main() -> None:
         # It is deprecated so get rid of the files on disk
         try:
             if os.path.exists(
-                f"checksums/{cloud}_{version_name.replace(' ', '_')}_CHECKSUM"
+                f"checksums/{cloud_name}_{version_name.replace(' ', '_')}_CHECKSUM"
             ):
                 logger.debug(
                     f"Image '{filename}' has been deprecated, deleting from local disk"
                 )
                 os.remove(
-                    f"checksums/{cloud}_{version_name.replace(' ', '_')}_CHECKSUM"
+                    f"checksums/{cloud_name}_{version_name.replace(' ', '_')}_CHECKSUM"
                 )
             else:
                 logger.debug(f"Image '{filename}' not present in local disk")
