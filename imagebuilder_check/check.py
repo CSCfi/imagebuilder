@@ -33,7 +33,7 @@ def format_duration(seconds, granularity = 2):
                 name = name.rstrip("s")
             human_time.append(f"{value} {name}")
     if not human_time:
-        return "now"
+        return "0 seconds"
     human_time = human_time[:granularity]
     return pretty_list(human_time)
 
