@@ -63,7 +63,7 @@ def get_run_data(filename: str) -> dict:
         if '"error"' in line and json_data:
             json_data["errors"].append(json.loads(line))
         if '"summary"' in line:
-            if not json_data:
+            if json_data == { "errors": [] }:
                 try:
                     json_data = json.loads(line)
                     json_data["errors"] = []
