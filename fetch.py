@@ -671,7 +671,10 @@ def create_image(
 
 
 def delete_unused_image(
-    conn: openstack.connection.Connection, name: str, skip: str = None
+    conn: openstack.connection.Connection,
+    name: str,
+    skip: str = None,
+    new_state: str = "private"
 ) -> dict:
     """
     Delete unused images but skip specified image if provided
@@ -715,17 +718,17 @@ def delete_unused_image(
                         "error": error,
                     }
                 )
-        elif img.visibility != "community":
+        elif img.visibility != new_state:
             logger.info(
                 f"Image {img.id} in use by a server, snapshot or volume"
-                + " setting it to community..."
+                + f" setting it to '{new_state}'..."
             )
-            conn.image.update_image(img.id, visibility="community")
+            conn.image.update_image(img.id, visibility=new_state)
             result["in_use"]["count"] += 1
             result["in_use"]["ids"].append(img.id)
         else:
             logger.debug(
-                f"Image {img.id} is in use by a server, snapshot or volume or it's a community"
+                f"Image {img.id} is in use by a server, snapshot or volume or it's a '{new_state}"
                 + " image, not deleting it..."
             )
             result["in_use"]["count"] += 1
