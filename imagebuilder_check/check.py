@@ -13,6 +13,29 @@ NAGIOS_STATE_CRITICAL = 2
 
 WAITED_FOR_TOO_LONG = 90000  # 25 hours
 
+def pretty_list(human_time):
+    """Prettify a list in English"""
+    if len(human_time) > 1:
+        return " ".join([", ".join(human_time[:-1]), "and", human_time[-1]])
+    if len(human_time) == 1:
+        return human_time[0]
+    return ""
+
+def format_duration(seconds, granularity = 2):
+    """Format a number in seconds into readable human time"""
+    intervals = (("hours", 3600), ("minutes", 60), ("seconds", 1))
+    human_time = []
+    for name, count in intervals:
+        value = seconds // count
+        if value:
+            seconds -= value * count
+            if value == 1:
+                name = name.rstrip("s")
+            human_time.append(f"{value} {name}")
+    if not human_time:
+        return "now"
+    human_time = human_time[:granularity]
+    return pretty_list(human_time)
 
 def get_run_data(filename: str) -> dict:
     """
@@ -88,7 +111,7 @@ def main() -> None:
         print(f"Failed to read json file: {input_json}")
         sys.exit(NAGIOS_STATE_CRITICAL)
 
-    run_data = get_run_data(filename, cloud)
+    run_data = get_run_data(filename)
 
     if time.time() - run_data["timestamp"] > WAITED_FOR_TOO_LONG:
         print(
@@ -97,7 +120,7 @@ def main() -> None:
         sys.exit(NAGIOS_STATE_CRITICAL)
 
     nagios_state = NAGIOS_STATE_OK
-    nagios_output = f"Last run {time.time() - run_data['timestamp']} seconds ago\n"
+    nagios_output = f"Last run {format_duration(time.time() - run_data['timestamp'])} ago\n"
     for error in run_data["errors"]:
         nagios_output += f"Error in last run: {error}\n"
 
