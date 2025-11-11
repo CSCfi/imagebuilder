@@ -838,6 +838,13 @@ def main() -> None:
         logger.info(f"'{version_name}' has been successfully updated")
 
     for version in input_data["deprecated"]:
+        if "image_name" not in version:
+            logger.warning(
+                {
+                    "message": "No image name found in image to delete",
+                    "image": version
+                }
+            )
         version_name = version["image_name"]
         logger.debug(
             {
