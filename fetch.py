@@ -845,6 +845,7 @@ def main() -> None:
                     "image": version
                 }
             )
+            continue
         version_name = version["image_name"]
         logger.debug(
             {
