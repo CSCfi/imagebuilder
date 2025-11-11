@@ -125,7 +125,7 @@ def main() -> None:
         nagios_output += f"Error in last run: {error}\n"
 
     for image_list in ("current", "deprecated"):
-        nagios_output += f"{image_list} images:\n"
+        nagios_output += f"{image_list.title()} images:\n"
         images = [v["image_name"] for v in input_json_data[image_list]]
         seen_images = []
 
