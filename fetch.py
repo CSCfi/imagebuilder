@@ -721,7 +721,7 @@ def delete_unused_image(
         elif img.visibility != new_state:
             logger.info(
                 f"Image {img.id} in use by a server, snapshot or volume"
-                + " setting it to 'hidden'..."
+                + f" setting it to 'hidden' and '{new_state}..."
             )
             conn.image.update_image(img.id, visibility=new_state)
             conn.image.update_image(img.id, os_hidden=True)
