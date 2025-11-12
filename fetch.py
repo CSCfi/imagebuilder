@@ -117,13 +117,13 @@ class ImgBuildLogger:
         return self._code
 
 
-cloud = os.getenv(
+cloud_name = os.getenv(
     "IMAGEBUILDER_CLOUD"
 )  # get it once to avoid potential race conditions
-network = os.getenv("IMAGEBUILDER_NETWORK")
+network_name = os.getenv("IMAGEBUILDER_NETWORK")
 
 logger = ImgBuildLogger(
-    log_file=os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud}_log.json"),
+    log_file=os.getenv("IMAGEBUILDER_LOG_FILE", f"./{cloud_name}_log.json"),
     output_format=os.getenv("IMAGEBUILDER_OUTPUT_FORMAT", "JSON"),
     debug_level=os.getenv("IMAGEBUILDER_DEBUG_LEVEL", "INFO"),
 )
@@ -438,7 +438,12 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
     return False
 
 
-def test_image(conn: openstack.connection.Connection, image: any, network: str) -> bool:
+def test_image(
+        conn: openstack.connection.Connection,
+        image: any,
+        network: str,
+        timeout: int,
+        flavor: str) -> bool:
     """
     Test the newly created image by creating a test server and pinging it
     Returns
@@ -493,16 +498,24 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
         test_server = conn.create_server(
             name=image.name + "_TESTSERVER",
             image=image,
-            flavor="standard.tiny",
+            flavor=flavor,
             wait=True,
             auto_ip=False,
             network=network,
-            timeout=360,
+            timeout=timeout,
             security_groups=[secgroup.id],
         )
-    except openstack.exceptions.SDKException as e:
-        logger.error("Server failed to be created!")
-        logger.error(str(e))
+    except openstack.exceptions.SDKException as error:
+        logger.error(
+            {
+                "message": f"Error creating server. {error}",
+                "image_name": image.name,
+                "network": network,
+                "security_groups": secgroup.id,
+                "server_name": image.name + "_TESTSERVER",
+                "timeout": timeout,
+            }
+        )
         return False
 
     logger.info(f"Server with id ({test_server.id}) created")
@@ -511,7 +524,12 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
 
     if found_test_server["status"] == "ERROR":
         conn.delete_server(test_server.id)
-        logger.error(f"Server {test_server.id} failed to start with image {image.id}!")
+        logger.error(
+            {
+                "message": f"Server {test_server.id} failed to start with image {image.id}!",
+                "image_name": image.name
+            }
+        )
         return False
 
     # Test pinging
@@ -520,7 +538,12 @@ def test_image(conn: openstack.connection.Connection, image: any, network: str) 
     conn.delete_server(test_server.id, wait=True)
 
     if not ping_result:
-        logger.error(f"Server {test_server.id} failed to respond to ping!")
+        logger.error(
+            {
+                "message": f"Server {test_server.id} failed to respond to ping!",
+                "image_name": image.name
+            }
+        )
         return False
 
     logger.info("All tests ok!")
@@ -562,6 +585,15 @@ def create_image(
         If everything is successful the newly created image is returned.
         If the image is already up to date or if there's an error None is returned
     """
+
+    if "timeout" in version:
+        timeout = version["timeout"]
+    else:
+        timeout = 600
+    if "flavor" in version:
+        flavor = version["flavor"]
+    else:
+        flavor = "standard.tiny"
 
     # Download image
     if not download_image(version["image_url"], filename, new_checksum):
@@ -621,20 +653,28 @@ def create_image(
     )
 
     if new_image is None:
-        logger.error("An error occured while creating the image")
+        logger.error(
+            {
+                "message": "An error occured while creating the image",
+                "image": version
+            }
+        )
         return None
 
     logger.info(f"Image with id ({new_image.id}) created")
 
     # Test image
-    if not test_image(conn, new_image, network):
+    if not test_image(conn, new_image, network, timeout, flavor):
         return None
 
     return new_image
 
 
 def delete_unused_image(
-    conn: openstack.connection.Connection, name: str, skip: str = None
+    conn: openstack.connection.Connection,
+    name: str,
+    skip: str = None,
+    new_state: str = "community"
 ) -> dict:
     """
     Delete unused images but skip specified image if provided
@@ -678,17 +718,18 @@ def delete_unused_image(
                         "error": error,
                     }
                 )
-        elif img.visibility != "community":
+        elif img.visibility != new_state:
             logger.info(
                 f"Image {img.id} in use by a server, snapshot or volume"
-                + " setting it to community..."
+                + f" setting it to 'hidden' and '{new_state}..."
             )
-            conn.image.update_image(img.id, visibility="community")
+            conn.image.update_image(img.id, visibility=new_state)
+            conn.image.update_image(img.id, os_hidden=True)
             result["in_use"]["count"] += 1
             result["in_use"]["ids"].append(img.id)
         else:
             logger.debug(
-                f"Image {img.id} is in use by a server, snapshot or volume or it's a community"
+                f"Image {img.id} is in use by a server, snapshot or volume or it's a '{new_state}"
                 + " image, not deleting it..."
             )
             result["in_use"]["count"] += 1
@@ -701,7 +742,7 @@ def main() -> None:
     """
     Reads defined images from input.json, downloads new images and deprecates old ones
     """
-    if cloud is None or network is None:
+    if cloud_name is None or network_name is None:
 
         missing = [
             x
@@ -717,8 +758,11 @@ def main() -> None:
         debug=(os.getenv("IMAGEBUILDER_OPENSTACK_DEBUG_LEVEL") is not None)
     )
 
-    conn = openstack.connect(cloud=cloud)
+    conn = openstack.connect(cloud=cloud_name)
     summary = {
+        "duration": time.time(),
+        "current": {},
+        "deprecated": {},
         "deleted_images": {
             "count": 0,
             "ids": [],
@@ -741,6 +785,10 @@ def main() -> None:
         input_data = json.load(f)
 
     for version in input_data["current"]:
+        version_name = version["image_name"]
+        summary["current"][version_name] = {
+            "state": None,
+        }
         logger.debug(
             {
                 "message": f"Checking current image '{version['image_name']}'...",
@@ -750,18 +798,20 @@ def main() -> None:
 
         filename = version["image_url"].split("/")[-1]
 
-        new_checksum = validate_checksum(version, filename, conn, cloud)
+        new_checksum = validate_checksum(version, filename, conn, cloud_name)
 
         if new_checksum is None:
             logger.debug(f"Image '{filename}' didn't change in remote source.")
+            summary["current"][version_name]['state'] = "No remote change"
             continue
 
         logger.info(f"Downloading {version['image_name']}")
 
-        new_image = create_image(conn, version, filename, new_checksum, network)
+        new_image = create_image(conn, version, filename, new_checksum, network_name)
 
         if new_image is None:
             logger.debug("Image is already up to date or there was an error")
+            summary["current"][version_name]['state'] = "Up-to-date or error creating image"
             continue
 
         # Everything is ok! Set visibility to what it should be
@@ -769,7 +819,9 @@ def main() -> None:
         conn.image.update_image(new_image.id, visibility=version["visibility"])
 
         # Remove old ones
-        result = delete_unused_image(conn, version["image_name"], new_image.id)
+        result = delete_unused_image(conn, version_name, new_image.id)
+        summary["current"][version_name]['state'] = "Ok"
+        summary["current"][version_name]['old_images_delete_result'] = result
         summary["deleted_images"]["count"] += result["deleted"]["count"]
         summary["in_use_images"]["count"] += result["in_use"]["count"]
         summary["deleted_images"]["ids"] += result["deleted"]["ids"]
@@ -777,15 +829,24 @@ def main() -> None:
 
         if new_checksum != filename:
             with open(
-                f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM",
+                f"checksums/{cloud_name}_{version_name.replace(' ', '_')}_CHECKSUM",
                 "w",
                 encoding="utf-8",
             ) as f:
                 f.write(new_checksum)
 
-        logger.info(f"'{version['image_name']}' has been successfully updated")
+        logger.info(f"'{version_name}' has been successfully updated")
 
     for version in input_data["deprecated"]:
+        if "image_name" not in version:
+            logger.warning(
+                {
+                    "message": "No image name found in image to delete",
+                    "image": version
+                }
+            )
+            continue
+        version_name = version["image_name"]
         logger.debug(
             {
                 "message": f"Checking deprecated image '{version['image_name']}'...",
@@ -793,18 +854,23 @@ def main() -> None:
             }
         )
         filename = version["filename"]
-        delete_unused_image(conn, version["image_name"])
+        result = delete_unused_image(conn, version_name)
+        summary["deprecated"][version_name] = result
+        summary["deleted_images"]["count"] += result["deleted"]["count"]
+        summary["in_use_images"]["count"] += result["in_use"]["count"]
+        summary["deleted_images"]["ids"] += result["deleted"]["ids"]
+        summary["in_use_images"]["ids"] += result["in_use"]["ids"]
 
         # It is deprecated so get rid of the files on disk
         try:
             if os.path.exists(
-                f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM"
+                f"checksums/{cloud_name}_{version_name.replace(' ', '_')}_CHECKSUM"
             ):
                 logger.debug(
                     f"Image '{filename}' has been deprecated, deleting from local disk"
                 )
                 os.remove(
-                    f"checksums/{cloud}_{version['image_name'].replace(' ', '_')}_CHECKSUM"
+                    f"checksums/{cloud_name}_{version_name.replace(' ', '_')}_CHECKSUM"
                 )
             else:
                 logger.debug(f"Image '{filename}' not present in local disk")
@@ -815,6 +881,8 @@ def main() -> None:
 
         if version.get("filename"):
             cleanup_files(version["filename"])
+    summary['duration'] = time.time() - summary['duration']
+    summary['exit_code'] = logger.exit_code
     logger.info({"summary": summary})
 
 
