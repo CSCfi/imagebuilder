@@ -745,51 +745,14 @@ def delete_unused_image(
     return result
 
 
-def main() -> None:
+def process_current_images(
+    input_data: dict,
+    summary: dict,
+    conn: openstack.connection.Connection
+) -> None:
     """
-    Reads defined images from input.json, downloads new images and deprecates old ones
+    Main loop processing the current images, i.e., the images that we want to be public.
     """
-    if cloud_name is None or network_name is None:
-
-        missing = [
-            x
-            for x in ["IMAGEBUILDER_CLOUD", "IMAGEBUILDER_NETWORK"]
-            if os.getenv(x) is None
-        ]
-
-        raise EnvironmentError(
-            f"Environment variables are not set! ({', '.join(missing)})"
-        )
-
-    openstack.enable_logging(
-        debug=(os.getenv("IMAGEBUILDER_OPENSTACK_DEBUG_LEVEL") is not None)
-    )
-
-    conn = openstack.connect(cloud=cloud_name)
-    summary = {
-        "duration": time.time(),
-        "current": {},
-        "deprecated": {},
-        "deleted_images": {
-            "count": 0,
-            "ids": [],
-        },
-        "in_use_images": {
-            "count": 0,
-            "ids": [],
-        },
-        "errors": {
-            "count": 0,
-            "ids": [],
-        },
-    }
-
-    # Load file from argv
-    input_data = None
-    input_file = os.getenv("IMAGEBUILDER_INPUT_FILE", "input.json")
-
-    with open(input_file, "r", encoding="utf-8") as f:
-        input_data = json.load(f)
 
     for version in input_data["current"]:
         version_name = version["image_name"]
@@ -844,6 +807,16 @@ def main() -> None:
 
         logger.info(f"'{version_name}' has been successfully updated")
 
+
+def process_deprecated_images(
+    input_data: dict,
+    summary: dict,
+    conn: openstack.connection.Connection
+) -> None:
+    """
+    Main loop processing the images to be deprecated, if present.
+    """
+
     for version in input_data["deprecated"]:
         if "image_name" not in version:
             logger.warning(
@@ -891,6 +864,57 @@ def main() -> None:
     summary['duration'] = time.time() - summary['duration']
     summary['exit_code'] = logger.exit_code
     logger.info({"summary": summary})
+
+
+def main() -> None:
+    """
+    Reads defined images from input.json, downloads new images and deprecates old ones
+    """
+    if cloud_name is None or network_name is None:
+
+        missing = [
+            x
+            for x in ["IMAGEBUILDER_CLOUD", "IMAGEBUILDER_NETWORK"]
+            if os.getenv(x) is None
+        ]
+
+        raise EnvironmentError(
+            f"Environment variables are not set! ({', '.join(missing)})"
+        )
+
+    openstack.enable_logging(
+        debug=(os.getenv("IMAGEBUILDER_OPENSTACK_DEBUG_LEVEL") is not None)
+    )
+
+    conn = openstack.connect(cloud=cloud_name)
+    summary = {
+        "duration": time.time(),
+        "current": {},
+        "deprecated": {},
+        "deleted_images": {
+            "count": 0,
+            "ids": [],
+        },
+        "in_use_images": {
+            "count": 0,
+            "ids": [],
+        },
+        "errors": {
+            "count": 0,
+            "ids": [],
+        },
+    }
+
+    # Load file from argv
+    input_data = None
+    input_file = os.getenv("IMAGEBUILDER_INPUT_FILE", "input.json")
+
+    with open(input_file, "r", encoding="utf-8") as f:
+        input_data = json.load(f)
+
+    process_current_images(input_data, summary, conn)
+
+    process_deprecated_images(input_data, summary, conn)
 
 
 if __name__ == "__main__":
