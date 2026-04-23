@@ -187,7 +187,12 @@ def download_image(url: str, filename: str, new_checksum: str) -> bool:
     cleanup_files(filename)
 
     try:
-        with requests.get(url, allow_redirects=True, timeout=600, stream=True) as r:
+        with requests.get(
+            url,
+            allow_redirects=True,
+            timeout=600,
+            stream=True,
+            headers={'Accept-Encoding': 'deflate'}) as r:
             with open("tmp/" + filename, "wb") as f:
                 file_size = int(r.headers.get("content-length"))
                 progress = 0
@@ -396,7 +401,9 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
         False if an error is detected
     """
 
-    if os.getenv("IMAGEBUILDER_DISABLE_PINGING") is not None:
+    disable_pinging = os.getenv("IMAGEBUILDER_DISABLE_PINGING")
+
+    if disable_pinging is not None and disable_pinging != "":
         logger.info("Skipping ping test...")
         return True
 
