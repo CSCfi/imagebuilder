@@ -403,7 +403,10 @@ def test_image_pinging(conn: openstack.connection.Connection, server_id: int) ->
 
     disable_pinging = os.getenv("IMAGEBUILDER_DISABLE_PINGING")
 
-    if disable_pinging is not None and disable_pinging != "":
+    # the following test covers two cases
+    # - env var IMAGEBUILDER_DISABLE_PINGING is not defined (disable_pinging is None)
+    # - env var IMAGEBUILDER_DISABLE_PINGING is an empty string
+    if disable_pinging:
         logger.info("Skipping ping test...")
         return True
 
